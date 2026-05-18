@@ -198,6 +198,127 @@ test('project material is derived automatically from selected meeting', function
     expect($project->materi)->toBe('Koneksi Database');
 });
 
+test('progress percentage uses equal BADRUL weights with half credit for stages in progress', function () {
+    $user = User::factory()->create([
+        'nama' => 'Admin AILS',
+        'username' => 'admin-progress-weight',
+        'password' => 'admin',
+        'role' => 'admin',
+        'prodi' => 'Pemrograman Visual',
+    ]);
+
+    $this->actingAs($user)->get(route('dashboard'));
+
+    $project = $user->fresh()->proyek()->first();
+
+    $this->actingAs($user)->post(route('dashboard.stages.update', [
+        'proyek' => $project->id_proyek,
+        'sintak' => 'B',
+    ]), [
+        'nama_proyek' => $project->nama_proyek,
+        'pertanyaan_mendasar' => 'Bagaimana merancang aplikasi kasir sederhana untuk UMKM?',
+        'masalah_nyata' => 'Pencatatan transaksi UMKM masih dilakukan manual dan rawan salah.',
+        'ide_solusi_awal' => 'Membangun aplikasi kasir sederhana berbasis desktop untuk UMKM.',
+        'tujuan_proyek' => 'Membangun aplikasi kasir sederhana yang mempermudah pencatatan transaksi.',
+        'catatan_tambahan' => 'Perlu fokus pada kemudahan penggunaan untuk kasir pemula.',
+        'advance' => '1',
+    ])->assertRedirect(route('dashboard.sintak', [
+        'proyek' => $project->id_proyek,
+        'sintak' => 'A',
+    ]));
+
+    $project = $project->fresh();
+
+    $this->actingAs($user)->post(route('dashboard.stages.update', [
+        'proyek' => $project->id_proyek,
+        'sintak' => 'A',
+    ]), [
+        'analisis_kebutuhan_pengguna' => 'Pengguna membutuhkan alur transaksi yang cepat dan mudah dipahami.',
+        'fitur_aplikasi' => 'Login, data produk, transaksi, dan laporan penjualan.',
+        'tools_software' => 'Visual Studio 2012 dan MySQL.',
+        'timeline_proyek' => 'Analisis, desain, implementasi, lalu pengujian.',
+        'pembagian_tugas' => 'Desain, database, dan pengujian dibagi per anggota.',
+        'catatan_tambahan' => 'Prioritaskan modul transaksi terlebih dahulu.',
+        'advance' => '1',
+    ])->assertRedirect(route('dashboard.sintak', [
+        'proyek' => $project->id_proyek,
+        'sintak' => 'D',
+    ]));
+
+    $project = $project->fresh();
+
+    $this->actingAs($user)
+        ->get(route('dashboard.progress', [
+            'proyek' => $project->id_proyek,
+            'sintak' => 'D',
+        ]))
+        ->assertOk()
+        ->assertSee('41,67%');
+});
+
+test('progress page AI suggestions follow the stage currently in process and reflective prompt uses project name', function () {
+    $user = User::factory()->create([
+        'nama' => 'Admin AILS',
+        'username' => 'admin-progress-ai',
+        'password' => 'admin',
+        'role' => 'admin',
+        'prodi' => 'Pemrograman Visual',
+    ]);
+
+    $this->actingAs($user)->get(route('dashboard'));
+
+    $project = $user->fresh()->proyek()->first();
+
+    $this->actingAs($user)->post(route('dashboard.stages.update', [
+        'proyek' => $project->id_proyek,
+        'sintak' => 'B',
+    ]), [
+        'nama_proyek' => $project->nama_proyek,
+        'pertanyaan_mendasar' => 'Bagaimana merancang aplikasi kasir sederhana untuk UMKM?',
+        'masalah_nyata' => 'Pencatatan transaksi UMKM masih dilakukan manual dan rawan salah.',
+        'ide_solusi_awal' => 'Membangun aplikasi kasir sederhana berbasis desktop untuk UMKM.',
+        'tujuan_proyek' => 'Membangun aplikasi kasir sederhana yang mempermudah pencatatan transaksi.',
+        'catatan_tambahan' => 'Perlu fokus pada kemudahan penggunaan untuk kasir pemula.',
+        'advance' => '1',
+    ])->assertRedirect(route('dashboard.sintak', [
+        'proyek' => $project->id_proyek,
+        'sintak' => 'A',
+    ]));
+
+    $project = $project->fresh();
+
+    $this->actingAs($user)->post(route('dashboard.stages.update', [
+        'proyek' => $project->id_proyek,
+        'sintak' => 'A',
+    ]), [
+        'analisis_kebutuhan_pengguna' => 'Pengguna membutuhkan alur transaksi yang cepat dan mudah dipahami.',
+        'fitur_aplikasi' => 'Login, data produk, transaksi, dan laporan penjualan.',
+        'tools_software' => 'Visual Studio 2012 dan MySQL.',
+        'timeline_proyek' => 'Analisis, desain, implementasi, lalu pengujian.',
+        'pembagian_tugas' => 'Desain, database, dan pengujian dibagi per anggota.',
+        'catatan_tambahan' => 'Prioritaskan modul transaksi terlebih dahulu.',
+        'advance' => '1',
+    ])->assertRedirect(route('dashboard.sintak', [
+        'proyek' => $project->id_proyek,
+        'sintak' => 'D',
+    ]));
+
+    $project = $project->fresh();
+
+    $this->actingAs($user)
+        ->get(route('dashboard.progress', [
+            'proyek' => $project->id_proyek,
+            'sintak' => 'B',
+        ]))
+        ->assertOk()
+        ->assertSee('Pastikan desain GUI sesuai dengan kebutuhan pengguna aplikasi.')
+        ->assertSee('Periksa kembali koneksi database dan struktur program sebelum pengujian aplikasi.')
+        ->assertSee('Gunakan AI Coding Assistant untuk membantu implementasi dan debugging program.')
+        ->assertDontSee('Gunakan AI Reasoning Assistant untuk membantu menganalisis masalah proyek.')
+        ->assertSee('Bantu saya merefleksikan perkembangan pembelajaran proyek', false)
+        ->assertSee($project->nama_proyek, false);
+});
+
 test('sintak page shows updated assistant choices for each stage', function () {
     $user = User::factory()->create([
         'nama' => 'Admin AILS',

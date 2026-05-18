@@ -33,7 +33,7 @@
             <div class="dashboard-progress-copy">
                 <div class="dashboard-progress-meta">
                     <span class="dashboard-progress-label">Progress BADRUL</span>
-                    <strong>{{ $progressPercent }}%</strong>
+                    <strong>{{ $progressPercentLabel }}%</strong>
                 </div>
                 <p>{{ $dashboardSummary['currentStageLabel'] }}</p>
             </div>
@@ -60,7 +60,7 @@
         <div class="analytics-grid">
             <article class="analytic-card">
                 <span>Progress BADRUL</span>
-                <strong>{{ $progressPercent }}%</strong>
+                <strong>{{ $progressPercentLabel }}%</strong>
             </article>
             <article class="analytic-card">
                 <span>Sintak Aktif</span>

@@ -415,7 +415,15 @@ class BadrulWorkflowService
         $progressRows = $project->progressSintak()->with('sintakBadrul')->get();
 
         $total = max($progressRows->count(), 1);
+        $stageWeight = 100 / $total;
         $completed = $progressRows->where('status', 'selesai')->count();
+        $weightedProgress = $progressRows->reduce(function (float $carry, $progress) use ($stageWeight): float {
+            return $carry + match ($progress->status) {
+                'selesai' => $stageWeight,
+                'proses' => $stageWeight / 2,
+                default => 0.0,
+            };
+        }, 0.0);
         $current = $progressRows->firstWhere('status', 'proses')
             ?? $progressRows->firstWhere('status', 'belum')
             ?? $progressRows->last();
@@ -425,7 +433,7 @@ class BadrulWorkflowService
         return [
             'total' => $total,
             'completed' => $completed,
-            'percentage' => (int) round(($completed / $total) * 100),
+            'percentage' => round(min($weightedProgress, 100), 2),
             'current_stage' => $current?->sintakBadrul?->kode_sintak,
             'workspace_count' => $workspaceCount,
             'reflection_count' => $reflectionCount,

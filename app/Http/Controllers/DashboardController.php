@@ -215,15 +215,16 @@ class DashboardController extends Controller
         $workspace = $this->workflow->stageWorkspace($currentProject, $activeStageCode);
         $workspaceValues = $this->workflow->workspaceValues($workspace);
         $stageCards = $this->workflow->stageCards($currentProject);
+        $reflectionStageCode = $this->reflectionStageCode($stageCards, $activeStageCode);
         $assistants = $this->workflow->assistantsForStage($activeStageCode);
         $selectedAssistant = $this->resolveAssistant($request, $assistants);
-        $reflectionAssistants = $this->workflow->assistantsForStage('L');
-        $reflectiveAssistant = $reflectionAssistants->firstWhere('nama_ai', 'AI Reflective Assistant')
-            ?? $reflectionAssistants->first();
         $analytics = $this->workflow->analytics($currentProject);
         $latestReflection = $this->workflow->latestReflection($currentProject);
         $pageMeta = $this->pageMeta($page);
-        $progressPercent = max(0, min(100, (int) ($analytics['percentage'] ?? 0)));
+        $progressPercent = round(max(0, min(100, (float) ($analytics['percentage'] ?? 0))), 2);
+        $progressPercentLabel = abs($progressPercent - floor($progressPercent)) < 0.001
+            ? number_format($progressPercent, 0, ',', '.')
+            : number_format($progressPercent, 2, ',', '.');
 
         return view('dashboard', [
             'page' => $page,
@@ -246,8 +247,9 @@ class DashboardController extends Controller
             'headerDescription' => $pageMeta['description'],
             'menuQuery' => $this->menuQuery($currentProject, $activeStageCode),
             'progressPercent' => $progressPercent,
-            'reflectionSuggestions' => $this->reflectionSuggestions($activeStageCode, $currentProject, $activeStage),
-            'reflectionAssistantPrompt' => $this->workflow->promptPreview($currentProject, 'L', $reflectiveAssistant),
+            'progressPercentLabel' => $progressPercentLabel,
+            'reflectionSuggestions' => $this->reflectionSuggestions($reflectionStageCode),
+            'reflectionAssistantPrompt' => $this->reflectionAssistantPrompt($currentProject),
             'dashboardSummary' => $this->dashboardSummary(
                 $currentProject,
                 $activeStage,
@@ -315,40 +317,55 @@ class DashboardController extends Controller
         return $menuQuery;
     }
 
-    private function reflectionSuggestions(string $activeStageCode, Proyek $currentProject, array $activeStage): array
+    private function reflectionStageCode(array $stageCards, string $fallbackCode): string
     {
-        return match ($activeStageCode) {
+        $processStageCode = collect($stageCards)
+            ->first(fn (array $card) => ($card['status'] ?? 'belum') === 'proses')['code'] ?? null;
+
+        return is_string($processStageCode) && $processStageCode !== ''
+            ? $processStageCode
+            : $fallbackCode;
+    }
+
+    private function reflectionSuggestions(string $stageCode): array
+    {
+        return match ($stageCode) {
             'B' => [
-                "Pastikan pertanyaan mendasar proyek sudah cukup spesifik dan tetap relevan dengan materi {$currentProject->materi}.",
-                'Tinjau kembali masalah nyata dan kebutuhan pengguna agar arah pengembangan tidak melebar.',
-                'Siapkan poin analisis awal untuk memudahkan transisi ke tahap Analyze and Plan.',
+                'Identifikasi permasalahan nyata yang relevan dengan kebutuhan pengguna.',
+                'Rumuskan pertanyaan mendasar proyek secara jelas dan terarah.',
+                'Gunakan AI Reasoning Assistant untuk membantu menganalisis masalah proyek.',
             ],
             'A' => [
-                'Periksa kembali prioritas fitur agar rencana pengembangan tetap realistis untuk satu siklus proyek.',
-                'Gunakan hasil analisis kebutuhan sebagai acuan sebelum mulai menulis kode utama.',
-                'Catat modul yang paling berisiko agar dapat dipantau saat masuk tahap pengembangan.',
+                'Analisis kebutuhan pengguna dan fitur aplikasi secara sistematis.',
+                'Susun rencana pengembangan proyek dan timeline pengerjaan dengan baik.',
+                'Gunakan AI Planning Assistant untuk membantu perencanaan proyek aplikasi.',
             ],
             'D' => [
-                "Pelajari kembali konsep {$currentProject->materi} pada tahap {$activeStage['title']}.",
-                'Gunakan AI Coding Assistant untuk membantu debugging koneksi database dan logika program.',
-                'Persiapkan demonstrasi aplikasi sebelum tahap Utilize and Present.',
+                'Pastikan desain GUI sesuai dengan kebutuhan pengguna aplikasi.',
+                'Periksa kembali koneksi database dan struktur program sebelum pengujian aplikasi.',
+                'Gunakan AI Coding Assistant untuk membantu implementasi dan debugging program.',
             ],
             'R' => [
-                'Fokuskan review pada skenario uji yang paling berpengaruh terhadap pengalaman pengguna akhir.',
-                'Dokumentasikan bug, akar masalah, dan hasil revisi agar proses perbaikan bisa dilacak.',
-                'Pastikan revisi utama selesai sebelum menyiapkan presentasi produk.',
+                'Evaluasi kembali tampilan, fitur, dan fungsi aplikasi yang telah dikembangkan.',
+                'Perbaiki kesalahan program dan revisi aplikasi berdasarkan hasil evaluasi.',
+                'Gunakan AI Feedback Assistant untuk membantu memperoleh saran perbaikan proyek.',
             ],
             'U' => [
-                'Latih alur demo agar manfaat produk dapat terlihat jelas dalam waktu singkat.',
-                'Siapkan jawaban untuk pertanyaan umum terkait fitur, manfaat, dan batasan sistem.',
-                'Gunakan refleksi hasil presentasi untuk memperkuat evaluasi pembelajaran akhir.',
+                'Siapkan demonstrasi aplikasi secara terstruktur dan mudah dipahami.',
+                'Jelaskan fitur utama aplikasi dengan bahasa yang jelas dan komunikatif.',
+                'Gunakan AI Presentation Assistant untuk membantu penyusunan materi presentasi.',
             ],
             default => [
-                'Rangkum pembelajaran paling penting dari keseluruhan proyek secara jujur dan terstruktur.',
-                'Identifikasi satu keberhasilan utama dan satu tantangan terbesar selama proses BADRUL.',
-                'Tentukan langkah perbaikan paling konkret untuk proyek atau siklus belajar berikutnya.',
+                'Lakukan refleksi terhadap pengalaman belajar dan proses pengembangan proyek.',
+                'Identifikasi kesulitan yang dihadapi dan strategi perbaikan pembelajaran berikutnya.',
+                'Gunakan AI Reflective Assistant untuk membantu refleksi dan evaluasi diri.',
             ],
         };
+    }
+
+    private function reflectionAssistantPrompt(Proyek $currentProject): string
+    {
+        return 'Bantu saya merefleksikan perkembangan pembelajaran proyek "'.$currentProject->nama_proyek.'" berdasarkan progres sintak dan kendala yang saya alami. Mengapa saya masih kesulitan pada beberapa bagian, apa penyebabnya, dan langkah perbaikan apa yang sebaiknya saya lakukan selanjutnya?';
     }
 
     private function dashboardSummary(

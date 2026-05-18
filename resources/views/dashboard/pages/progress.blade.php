@@ -92,7 +92,7 @@
 
                 <div class="project-detail-section progress-meter">
                     <span class="detail-label">Progress Keseluruhan</span>
-                    <strong>{{ $progressPercent }}%</strong>
+                    <strong>{{ $progressPercentLabel }}%</strong>
                     <div class="progress-meter-bar" aria-hidden="true">
                         <div class="progress-meter-fill" style="width: {{ $progressPercent }}%;"></div>
                     </div>
