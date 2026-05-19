@@ -195,6 +195,8 @@
             }
 
             .content-pane {
+                display: flex;
+                flex-direction: column;
                 border-radius: 0;
                 border: 1px solid var(--line-strong);
                 border-left: 0;
@@ -319,7 +321,9 @@
 
             .main-grid {
                 margin-top: 14px;
-                display: grid;
+                display: flex;
+                flex: 1;
+                flex-direction: column;
                 gap: 12px;
             }
 
@@ -367,6 +371,35 @@
 
             .sintak-toolbar-panel {
                 padding: 10px 14px;
+            }
+
+            .sintak-setup-panel {
+                padding: 18px;
+            }
+
+            .project-form.sintak-setup-form {
+                max-width: 980px;
+                grid-template-columns: 118px minmax(0, 1fr);
+            }
+
+            .sintak-setup-note {
+                display: block;
+                padding: 12px 14px;
+                border: 1px dashed rgba(29, 95, 242, 0.26);
+                border-radius: 12px;
+                background: linear-gradient(180deg, #f7fbff 0%, #eef5ff 100%);
+                color: var(--navy-900);
+                font-size: 0.72rem;
+                font-weight: 600;
+                line-height: 1.6;
+            }
+
+            .sintak-setup-actions {
+                align-items: flex-start;
+            }
+
+            .sintak-setup-actions .button-secondary {
+                min-width: 220px;
             }
 
             .sintak-toolbar-form {
@@ -886,9 +919,12 @@
                 transform: translateY(-2px);
             }
 
-            .sintak-card.is-active {
-                border-color: rgba(255, 123, 26, 0.42);
-                box-shadow: 0 16px 32px rgba(255, 123, 26, 0.12);
+            .sintak-card:focus-visible {
+                outline: none;
+                border-color: var(--stage-color, var(--warning));
+                box-shadow:
+                    0 16px 32px color-mix(in srgb, var(--stage-color, var(--warning)) 18%, transparent),
+                    0 0 0 3px color-mix(in srgb, var(--stage-color, var(--warning)) 18%, transparent);
             }
 
             .sintak-card.is-selesai {
@@ -901,6 +937,11 @@
 
             .sintak-card.is-belum {
                 border-color: rgba(140, 149, 173, 0.25);
+            }
+
+            .sintak-card.is-active {
+                border-color: var(--stage-color, var(--warning));
+                box-shadow: 0 16px 32px color-mix(in srgb, var(--stage-color, var(--warning)) 18%, transparent);
             }
 
             .stage-head {
@@ -1833,6 +1874,7 @@
                 align-items: center;
                 justify-content: space-between;
                 gap: 12px;
+                margin-top: auto;
                 padding: 11px 14px;
                 border-radius: 13px;
                 border: 1px solid var(--line-strong);

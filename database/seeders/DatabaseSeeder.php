@@ -25,9 +25,19 @@ class DatabaseSeeder extends Seeder
         );
 
         User::query()->updateOrCreate(
-            ['username' => 'andi'],
+            ['username' => 'ali'],
             [
-                'nama' => 'Andi',
+                'nama' => 'Muhammad Ali',
+                'password' => '12345678',
+                'role' => 'mahasiswa',
+                'prodi' => 'Sistem Informasi',
+            ]
+        );
+
+        User::query()->updateOrCreate(
+            ['username' => 'putri'],
+            [
+                'nama' => 'Putri Ayu',
                 'password' => '12345678',
                 'role' => 'mahasiswa',
                 'prodi' => 'Sistem Informasi',

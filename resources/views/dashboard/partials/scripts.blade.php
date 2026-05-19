@@ -160,6 +160,16 @@
         updateLaunchFeedback('Prompt akan disalin ke clipboard lalu ChatGPT Web dibuka.');
     });
 
+    if (meetingField && ! meetingField.hasAttribute('data-sintak-autosubmit')) {
+        meetingField.addEventListener('change', () => {
+            syncMaterialField();
+        });
+
+        materialField?.addEventListener('change', () => {
+            meetingField.value = meetingForMaterial(materialField.value);
+        });
+    }
+
     document.querySelectorAll('[data-sintak-autosubmit]').forEach((input) => {
         input.addEventListener('change', () => {
             if (input === meetingField) {

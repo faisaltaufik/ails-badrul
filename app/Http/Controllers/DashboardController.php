@@ -18,22 +18,22 @@ class DashboardController extends Controller
     {
     }
 
-    public function index(Request $request): View
+    public function index(Request $request): View|RedirectResponse
     {
         return $this->renderPage($request, 'dashboard');
     }
 
-    public function sintak(Request $request): View
+    public function sintak(Request $request): View|RedirectResponse
     {
         return $this->renderPage($request, 'sintak');
     }
 
-    public function progress(Request $request): View
+    public function progress(Request $request): View|RedirectResponse
     {
         return $this->renderPage($request, 'progress');
     }
 
-    public function help(Request $request): View
+    public function help(Request $request): View|RedirectResponse
     {
         return $this->renderPage($request, 'help');
     }
@@ -42,15 +42,29 @@ class DashboardController extends Controller
     {
         /** @var User $user */
         $user = $request->user();
-        $project = $this->workflow->createProject($user, [
-            'nama_proyek' => 'Proyek BADRUL Baru',
+        $validated = $request->validate([
+            'page' => ['nullable', 'string'],
+            'nama_proyek' => ['required', 'string', 'max:200'],
+            'deskripsi' => ['required', 'string'],
+            'pertemuan_ke' => ['nullable', 'integer', 'min:1', 'max:14'],
         ]);
 
+        $attributes = [
+            'nama_proyek' => $validated['nama_proyek'],
+            'deskripsi' => $validated['deskripsi'],
+        ];
+
+        if (array_key_exists('pertemuan_ke', $validated)) {
+            $attributes['pertemuan_ke'] = (int) $validated['pertemuan_ke'];
+        }
+
+        $project = $this->workflow->createProject($user, $attributes);
+
         return $this->redirectToPage(
-            $this->normalizePage($request->string('page')->toString()),
+            $this->normalizePage($validated['page'] ?? 'sintak', 'sintak'),
             $project,
             'B',
-            'Proyek baru berhasil dibuat. Lengkapi profil proyek dan mulai dari sintak B.',
+            'Proyek baru berhasil dibuat. Lanjutkan pengisian dan mulai dari sintak B.',
         );
     }
 
@@ -182,21 +196,27 @@ class DashboardController extends Controller
         );
     }
 
-    private function renderPage(Request $request, string $page): View
+    private function renderPage(Request $request, string $page): View|RedirectResponse
     {
         /** @var User $user */
         $user = $request->user();
 
         $this->workflow->syncMasterData();
+        $pageMeta = $this->pageMeta($page);
 
         $projects = $user->proyek()->orderByDesc('tanggal_buat')->get();
 
         if ($projects->isEmpty()) {
-            $this->workflow->createProject($user);
-            $projects = $user->proyek()->orderByDesc('tanggal_buat')->get();
+            if (in_array($page, ['sintak', 'help'], true)) {
+                return $this->renderPageWithoutProject($user, $projects, $page, $pageMeta);
+            }
+
+            return redirect()
+                ->route('dashboard.sintak')
+                ->with('status', 'Belum ada proyek. Pilih pertemuan pada menu Sintaks BADRUL untuk membuat proyek pertama Anda.');
         }
 
-        $currentProject = $this->resolveProject($request, $user, $projects);
+        $currentProject = $this->resolveProject($request, $projects);
 
         $this->workflow->ensureProjectWorkflow($currentProject);
 
@@ -220,7 +240,6 @@ class DashboardController extends Controller
         $selectedAssistant = $this->resolveAssistant($request, $assistants);
         $analytics = $this->workflow->analytics($currentProject);
         $latestReflection = $this->workflow->latestReflection($currentProject);
-        $pageMeta = $this->pageMeta($page);
         $progressPercent = round(max(0, min(100, (float) ($analytics['percentage'] ?? 0))), 2);
         $progressPercentLabel = abs($progressPercent - floor($progressPercent)) < 0.001
             ? number_format($progressPercent, 0, ',', '.')
@@ -258,16 +277,55 @@ class DashboardController extends Controller
                 $stageCards,
                 $latestReflection,
             ),
-            'statusLabels' => [
-                'selesai' => 'Selesai',
-                'proses' => 'Proses',
-                'belum' => 'Belum',
+            'statusLabels' => $this->statusLabels(),
+            'statusColors' => $this->statusColors(),
+        ]);
+    }
+
+    private function renderPageWithoutProject(User $user, Collection $projects, string $page, array $pageMeta): View
+    {
+        $activeStageCode = 'B';
+        $activeStage = $this->workflow->stageDefinition($activeStageCode);
+
+        return view('dashboard', [
+            'page' => $page,
+            'user' => $user,
+            'userRoleLabel' => $this->userRoleLabel($user),
+            'projects' => $projects,
+            'currentProject' => null,
+            'meetingOptions' => $this->workflow->meetingOptions(),
+            'materialOptions' => $this->workflow->materialOptions(),
+            'stageCards' => [],
+            'activeStageCode' => $activeStageCode,
+            'activeStage' => $activeStage,
+            'workspaceValues' => [],
+            'assistants' => collect(),
+            'selectedAssistantId' => null,
+            'analytics' => [
+                'total' => count($this->workflow->stageCodes()),
+                'completed' => 0,
+                'percentage' => 0,
+                'current_stage' => $activeStageCode,
+                'workspace_count' => 0,
+                'reflection_count' => 0,
+                'last_activity' => null,
             ],
-            'statusColors' => [
-                'selesai' => 'var(--success)',
-                'proses' => 'var(--warning)',
-                'belum' => 'var(--pending)',
+            'latestReflection' => null,
+            'helpCards' => $this->workflow->helpCards(),
+            'headerTitle' => $pageMeta['title'],
+            'headerDescription' => $pageMeta['description'],
+            'menuQuery' => [],
+            'progressPercent' => 0,
+            'progressPercentLabel' => '0',
+            'reflectionSuggestions' => [],
+            'reflectionAssistantPrompt' => '',
+            'dashboardSummary' => [
+                'currentStageLabel' => "{$activeStageCode} - {$activeStage['title']}",
+                'recentStageCards' => collect(),
+                'latestReflectionPreview' => 'Belum ada refleksi yang disimpan. Gunakan menu Refleksi & Progress untuk mulai mencatat pembelajaran.',
             ],
+            'statusLabels' => $this->statusLabels(),
+            'statusColors' => $this->statusColors(),
         ]);
     }
 
@@ -368,6 +426,24 @@ class DashboardController extends Controller
         return 'Bantu saya merefleksikan perkembangan pembelajaran proyek "'.$currentProject->nama_proyek.'" berdasarkan progres sintak dan kendala yang saya alami. Mengapa saya masih kesulitan pada beberapa bagian, apa penyebabnya, dan langkah perbaikan apa yang sebaiknya saya lakukan selanjutnya?';
     }
 
+    private function statusLabels(): array
+    {
+        return [
+            'selesai' => 'Selesai',
+            'proses' => 'Proses',
+            'belum' => 'Belum',
+        ];
+    }
+
+    private function statusColors(): array
+    {
+        return [
+            'selesai' => 'var(--success)',
+            'proses' => 'var(--warning)',
+            'belum' => 'var(--pending)',
+        ];
+    }
+
     private function dashboardSummary(
         Proyek $currentProject,
         array $activeStage,
@@ -429,7 +505,7 @@ class DashboardController extends Controller
         };
     }
 
-    private function resolveProject(Request $request, User $user, Collection $projects): Proyek
+    private function resolveProject(Request $request, Collection $projects): Proyek
     {
         $selectedProjectId = $request->integer('proyek');
 
@@ -441,7 +517,11 @@ class DashboardController extends Controller
             }
         }
 
-        return $projects->first() ?? $this->workflow->createProject($user);
+        $project = $projects->first();
+
+        abort_unless($project instanceof Proyek, 404);
+
+        return $project;
     }
 
     private function resolveAssistant(Request $request, Collection $assistants): ?AiAssistant

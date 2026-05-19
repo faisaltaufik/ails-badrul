@@ -1,10 +1,37 @@
 <?php
 
+use App\Models\Proyek;
 use App\Services\BadrulWorkflowService;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
+
+function createDraftProjectForUser(
+    User $user,
+    int $meetingNumber = 5,
+    string $projectName = 'Aplikasi Kasir Sederhana',
+    string $projectDescription = 'Aplikasi kasir sederhana untuk membantu pencatatan transaksi dan laporan penjualan.'
+): Proyek
+{
+    $response = test()->actingAs($user)->post(route('dashboard.projects.create'), [
+        'page' => 'sintak',
+        'nama_proyek' => $projectName,
+        'deskripsi' => $projectDescription,
+        'pertemuan_ke' => $meetingNumber,
+    ]);
+
+    $project = $user->fresh()->proyek()->first();
+
+    expect($project)->not->toBeNull();
+
+    $response->assertRedirect(route('dashboard.sintak', [
+        'proyek' => $project->id_proyek,
+        'sintak' => 'B',
+    ]));
+
+    return $project;
+}
 
 test('guest can open the login page', function () {
     $response = $this->get('/');
@@ -35,6 +62,70 @@ test('user can login with valid username and password', function () {
     $this->assertAuthenticatedAs($user);
 });
 
+test('user without project is directed to sintak setup and no project is created automatically', function () {
+    $user = User::factory()->create([
+        'nama' => 'Admin AILS',
+        'username' => 'admin-no-project',
+        'password' => 'admin',
+        'role' => 'admin',
+        'prodi' => 'Pemrograman Visual',
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertRedirect(route('dashboard.sintak'));
+
+    $this->actingAs($user)
+        ->get(route('dashboard.progress'))
+        ->assertRedirect(route('dashboard.sintak'));
+
+    $this->actingAs($user)
+        ->get(route('dashboard.help'))
+        ->assertOk()
+        ->assertSee('Panduan Penggunaan AILS BADRUL');
+
+    $this->actingAs($user)
+        ->get(route('dashboard.sintak'))
+        ->assertOk()
+        ->assertSee('Mulai Proyek dari Sintaks BADRUL')
+        ->assertSee('Buat Proyek &amp; Mulai Sintak B', false)
+        ->assertSee('Nama Proyek *')
+        ->assertSee('Deskripsi Proyek *')
+        ->assertSee('Proyek akan dibuat setelah Anda menekan tombol di bawah.');
+
+    expect($user->fresh()->proyek()->count())->toBe(0);
+});
+
+test('user can create project from sintak setup with project name and description', function () {
+    $user = User::factory()->create([
+        'nama' => 'Admin AILS',
+        'username' => 'admin-create-project',
+        'password' => 'admin',
+        'role' => 'admin',
+        'prodi' => 'Pemrograman Visual',
+    ]);
+
+    $response = $this->actingAs($user)->post(route('dashboard.projects.create'), [
+        'page' => 'sintak',
+        'nama_proyek' => 'Sistem Inventori Toko',
+        'deskripsi' => 'Aplikasi untuk mengelola stok barang, pencatatan barang masuk, dan laporan inventori toko.',
+        'pertemuan_ke' => 8,
+    ]);
+
+    $project = $user->fresh()->proyek()->first();
+
+    expect($project)->not->toBeNull();
+    expect($project->nama_proyek)->toBe('Sistem Inventori Toko');
+    expect($project->deskripsi)->toBe('Aplikasi untuk mengelola stok barang, pencatatan barang masuk, dan laporan inventori toko.');
+    expect($project->pertemuan_ke)->toBe(8);
+    expect($project->materi)->toBe('Database (MySQL)');
+
+    $response->assertRedirect(route('dashboard.sintak', [
+        'proyek' => $project->id_proyek,
+        'sintak' => 'B',
+    ]));
+});
+
 test('authenticated user can see the dashboard overview page', function () {
     $user = User::factory()->create([
         'nama' => 'Admin AILS',
@@ -43,6 +134,8 @@ test('authenticated user can see the dashboard overview page', function () {
         'role' => 'admin',
         'prodi' => 'Pemrograman Visual',
     ]);
+
+    createDraftProjectForUser($user);
 
     $response = $this->actingAs($user)->get(route('dashboard'));
 
@@ -62,8 +155,10 @@ test('authenticated user can open menu pages separately', function () {
         'prodi' => 'Pemrograman Visual',
     ]);
 
+    $project = createDraftProjectForUser($user);
+
     $this->actingAs($user)
-        ->get(route('dashboard.sintak'))
+        ->get(route('dashboard.sintak', ['proyek' => $project->id_proyek]))
         ->assertOk()
         ->assertSee('Model PjBL Sintaks B A D R U L')
         ->assertSee('AI Assistant untuk Sintak B')
@@ -72,7 +167,7 @@ test('authenticated user can open menu pages separately', function () {
         ->assertDontSee('Prompt lengkap yang akan digunakan');
 
     $this->actingAs($user)
-        ->get(route('dashboard.progress'))
+        ->get(route('dashboard.progress', ['proyek' => $project->id_proyek]))
         ->assertOk()
         ->assertSee('Refleksi & Progress')
         ->assertSee('Progress per Sintak BADRUL')
@@ -80,7 +175,7 @@ test('authenticated user can open menu pages separately', function () {
         ->assertSee('Saran AI untuk Pembelajaran');
 
     $this->actingAs($user)
-        ->get(route('dashboard.help'))
+        ->get(route('dashboard.help', ['proyek' => $project->id_proyek]))
         ->assertOk()
         ->assertSee('Panduan Penggunaan AILS BADRUL')
         ->assertSee('Ringkasan cara kerja prototipe');
@@ -95,9 +190,9 @@ test('user can save reflection journal from progress page', function () {
         'prodi' => 'Pemrograman Visual',
     ]);
 
-    $this->actingAs($user)->get(route('dashboard.progress'));
+    $project = createDraftProjectForUser($user);
 
-    $project = $user->fresh()->proyek()->first();
+    $this->actingAs($user)->get(route('dashboard.progress', ['proyek' => $project->id_proyek]));
 
     $response = $this->actingAs($user)->post(route('dashboard.reflection.update', $project), [
         'page' => 'progress',
@@ -125,9 +220,7 @@ test('user can save the current stage and advance to the next sintak', function 
         'prodi' => 'Pemrograman Visual',
     ]);
 
-    $this->actingAs($user)->get(route('dashboard'));
-
-    $project = $user->fresh()->proyek()->first();
+    $project = createDraftProjectForUser($user);
 
     $response = $this->actingAs($user)->post(route('dashboard.stages.update', [
         'proyek' => $project->id_proyek,
@@ -175,9 +268,7 @@ test('project material is derived automatically from selected meeting', function
         'prodi' => 'Pemrograman Visual',
     ]);
 
-    $this->actingAs($user)->get(route('dashboard.sintak'));
-
-    $project = $user->fresh()->proyek()->first();
+    $project = createDraftProjectForUser($user);
 
     $response = $this->actingAs($user)->post(route('dashboard.projects.update', $project), [
         'page' => 'sintak',
@@ -207,9 +298,7 @@ test('progress percentage uses equal BADRUL weights with half credit for stages 
         'prodi' => 'Pemrograman Visual',
     ]);
 
-    $this->actingAs($user)->get(route('dashboard'));
-
-    $project = $user->fresh()->proyek()->first();
+    $project = createDraftProjectForUser($user);
 
     $this->actingAs($user)->post(route('dashboard.stages.update', [
         'proyek' => $project->id_proyek,
@@ -265,9 +354,7 @@ test('progress page AI suggestions follow the stage currently in process and ref
         'prodi' => 'Pemrograman Visual',
     ]);
 
-    $this->actingAs($user)->get(route('dashboard'));
-
-    $project = $user->fresh()->proyek()->first();
+    $project = createDraftProjectForUser($user);
 
     $this->actingAs($user)->post(route('dashboard.stages.update', [
         'proyek' => $project->id_proyek,
@@ -328,9 +415,7 @@ test('sintak page shows updated assistant choices for each stage', function () {
         'prodi' => 'Pemrograman Visual',
     ]);
 
-    $this->actingAs($user)->get(route('dashboard.sintak'));
-
-    $project = $user->fresh()->proyek()->first();
+    $project = createDraftProjectForUser($user);
 
     $cases = [
         'B' => [
@@ -404,9 +489,7 @@ test('assistant radios start unchecked and expose default prompt text metadata',
         'prodi' => 'Pemrograman Visual',
     ]);
 
-    $this->actingAs($user)->get(route('dashboard.sintak'));
-
-    $project = $user->fresh()->proyek()->first();
+    $project = createDraftProjectForUser($user);
 
     $expectedByStage = [
         'B' => [
