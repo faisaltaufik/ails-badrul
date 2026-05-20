@@ -4,7 +4,7 @@ return [
     'meeting_options' => range(1, 14),
 
     'material_options' => [
-        'Pengantar Pemrograman Visual Dan Pengenalan Visual Studio 12',
+        'Pengantar Pemrograman Visual Dan Pengenalan Visual Studio 2012',
         'OOP (Object Oriented Programing)',
         'OOP (Object Oriented Programing) - Lanjutan',
         'UI dan UX dengan Visual Studio 2012 (Case : Program Kasir Sederhana)',

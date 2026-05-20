@@ -23,7 +23,7 @@
         <div class="panel-header">
             <div>
                 <h2 class="panel-title">Progress per Sintak BADRUL</h2>
-                <p class="panel-subtitle">Pantau status dan akses terakhir pada setiap tahapan sintak BADRUL.</p>
+                {{-- <p class="panel-subtitle">Pantau status dan akses terakhir pada setiap tahapan sintak BADRUL.</p> --}}
             </div>
         </div>
 
@@ -75,7 +75,7 @@
             <div class="panel-header">
                 <div>
                     <h2 class="panel-title">Detail Proyek</h2>
-                    <p class="panel-subtitle">Ringkasan proyek aktif dan progres keseluruhan yang sudah dicapai.</p>
+                    {{-- <p class="panel-subtitle">Ringkasan proyek aktif dan progres keseluruhan yang sudah dicapai.</p> --}}
                 </div>
             </div>
 

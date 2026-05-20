@@ -1,3 +1,83 @@
+@if (! $currentProject)
+    @php
+        $setupMeetingOptions = array_map(static fn ($option) => (int) $option, $meetingOptions);
+        $setupMeeting = (int) old('pertemuan_ke', $setupMeetingOptions[0] ?? 1);
+
+        if (! in_array($setupMeeting, $setupMeetingOptions, true)) {
+            $setupMeeting = $setupMeetingOptions[0] ?? 1;
+        }
+
+        $setupMaterialIndex = max(0, min(count($materialOptions) - 1, $setupMeeting - 1));
+        $setupMaterial = $materialOptions[$setupMaterialIndex] ?? '-';
+    @endphp
+
+    <section class="panel sintak-setup-panel">
+        <div class="panel-header">
+            <div>
+                <h2 class="panel-title">Mulai Proyek dengan Sintaks BADRUL</h2>
+                <p class="panel-subtitle">Pilih Pertemuan atau Materi terlebih dahulu. Buat Nama dan Deskripsi Proyek Anda.</p>
+            </div>
+        </div>
+
+        <form class="project-form sintak-setup-form" method="POST" action="{{ route('dashboard.projects.create') }}">
+            @csrf
+            <input type="hidden" name="page" value="sintak">
+
+            <div class="field">
+                <label for="sintak-pertemuan">Pertemuan Ke *</label>
+                <select id="sintak-pertemuan" name="pertemuan_ke">
+                    @foreach ($meetingOptions as $meetingOption)
+                        <option value="{{ $meetingOption }}" {{ $setupMeeting === (int) $meetingOption ? 'selected' : '' }}>
+                            {{ $meetingOption }}
+                        </option>
+                    @endforeach
+                </select>
+                @error('pertemuan_ke')
+                    <span class="error-text">{{ $message }}</span>
+                @enderror
+            </div>
+
+            <div class="field">
+                <label for="sintak-materi">Materi</label>
+                <select
+                    id="sintak-materi"
+                    name="materi"
+                    data-material-display
+                >
+                    @foreach ($materialOptions as $materialOption)
+                        <option value="{{ $materialOption }}" {{ $setupMaterial === $materialOption ? 'selected' : '' }}>
+                            {{ $materialOption }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+
+            <div class="field span-2">
+                <label for="nama_proyek">Nama Proyek *</label>
+                <input id="nama_proyek" name="nama_proyek" type="text" value="{{ old('nama_proyek') }}" placeholder="Tuliskan nama proyek Anda...">
+                @error('nama_proyek')
+                    <span class="error-text">{{ $message }}</span>
+                @enderror
+            </div>
+
+            <div class="field span-2">
+                <label for="deskripsi">Deskripsi Proyek *</label>
+                <textarea id="deskripsi" name="deskripsi" placeholder="Jelaskan singkat proyek yang akan Anda kerjakan...">{{ old('deskripsi') }}</textarea>
+                @error('deskripsi')
+                    <span class="error-text">{{ $message }}</span>
+                @enderror
+            </div>
+
+            <div class="field span-2">
+                <span class="sintak-setup-note">Proyek akan dibuat setelah Anda menekan tombol di bawah. Setelah itu Anda tetap bisa memperbaruinya saat masuk ke Sintak B.</span>
+            </div>
+
+            <div class="field span-2 sintak-setup-actions">
+                <button class="button-secondary" type="submit">Buat Proyek &amp; Mulai Sintak B</button>
+            </div>
+        </form>
+    </section>
+@else
 <section class="hero-grid">
     <article class="panel dashboard-hero-panel">
         <div class="panel-header dashboard-hero-header">
@@ -220,3 +300,4 @@
         </article>
     </aside>
 </section> --}}
+@endif

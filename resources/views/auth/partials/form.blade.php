@@ -1,4 +1,4 @@
-<div class="form-kicker">{{ $loginFormMeta['kicker'] }}</div>
+{{-- <div class="form-kicker">{{ $loginFormMeta['kicker'] }}</div> --}}
 
 <form class="form-block" method="POST" action="{{ route('login.store') }}">
     @csrf

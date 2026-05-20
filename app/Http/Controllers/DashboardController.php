@@ -207,13 +207,13 @@ class DashboardController extends Controller
         $projects = $user->proyek()->orderByDesc('tanggal_buat')->get();
 
         if ($projects->isEmpty()) {
-            if (in_array($page, ['sintak', 'help'], true)) {
+            if (in_array($page, ['dashboard', 'help'], true)) {
                 return $this->renderPageWithoutProject($user, $projects, $page, $pageMeta);
             }
 
             return redirect()
-                ->route('dashboard.sintak')
-                ->with('status', 'Belum ada proyek. Pilih pertemuan pada menu Sintaks BADRUL untuk membuat proyek pertama Anda.');
+                ->route('dashboard');
+                // ->with('status', 'Belum ada proyek. Pilih pertemuan pada menu Sintaks BADRUL untuk membuat proyek pertama Anda.');
         }
 
         $currentProject = $this->resolveProject($request, $projects);
@@ -337,8 +337,8 @@ class DashboardController extends Controller
                 'description' => 'Pantau proyek aktif, progress BADRUL, dan fokus pembelajaran utama Anda dari halaman dashboard.',
             ],
             'sintak' => [
-                'title' => 'Sintaks BADRUL',
-                'description' => 'Kelola area kerja pada setiap tahapan BADRUL dan gunakan AI assistant yang sesuai dengan sintak yang sedang aktif.',
+                'title' => 'Artificial Intelligence Learning System - BADRUL',
+                'description' => 'Kelola ruang kerja proyek pada setiap tahapan BADRUL dan gunakan AI Assistant yang dibutuhkan.',
             ],
             'progress' => [
                 'title' => 'Refleksi & Progress',

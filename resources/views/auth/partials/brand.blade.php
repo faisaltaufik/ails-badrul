@@ -5,11 +5,11 @@
 
     <hr class="brand-divider" aria-hidden="true">
 
-    {{-- <div class="brand-copy">
+    <div class="brand-copy">
         <h1 class="headline">
             <strong>{{ $loginBranding['title'] }}</strong>
             <span>{{ $loginBranding['subtitle'] }}</span>
         </h1>
         <p class="subtitle">{{ $loginBranding['supportingText'] }}</p>
-    </div> --}}
+    </div>
 </div>
