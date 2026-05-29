@@ -14,23 +14,19 @@ function createDraftProjectForUser(
     string $projectDescription = 'Aplikasi kasir sederhana untuk membantu pencatatan transaksi dan laporan penjualan.'
 ): Proyek
 {
-    $response = test()->actingAs($user)->post(route('dashboard.projects.create'), [
-        'page' => 'sintak',
-        'nama_proyek' => $projectName,
-        'deskripsi' => $projectDescription,
-        'pertemuan_ke' => $meetingNumber,
-    ]);
+    app(BadrulWorkflowService::class)->ensureUserProjects($user);
 
-    $project = $user->fresh()->proyek()->first();
+    $project = $user->fresh()->proyek()->where('pertemuan_ke', $meetingNumber)->first();
 
     expect($project)->not->toBeNull();
 
-    $response->assertRedirect(route('dashboard.sintak', [
-        'proyek' => $project->id_proyek,
-        'sintak' => 'B',
-    ]));
+    app(BadrulWorkflowService::class)->updateProject($project, [
+        'pertemuan_ke' => $meetingNumber,
+        'nama_proyek' => $projectName,
+        'deskripsi' => $projectDescription,
+    ]);
 
-    return $project;
+    return $project->fresh();
 }
 
 test('guest can open the login page', function () {
@@ -60,9 +56,11 @@ test('user can login with valid username and password', function () {
 
     $response->assertRedirect(route('dashboard'));
     $this->assertAuthenticatedAs($user);
+    expect($user->fresh()->proyek()->count())->toBe(14);
+    expect($user->fresh()->proyek()->orderBy('pertemuan_ke')->pluck('pertemuan_ke')->all())->toBe(range(1, 14));
 });
 
-test('user without project is directed to sintak setup and no project is created automatically', function () {
+test('dashboard auto prepares all BADRUL projects and removes manual create form', function () {
     $user = User::factory()->create([
         'nama' => 'Admin AILS',
         'username' => 'admin-no-project',
@@ -73,11 +71,15 @@ test('user without project is directed to sintak setup and no project is created
 
     $this->actingAs($user)
         ->get(route('dashboard'))
-        ->assertRedirect(route('dashboard.sintak'));
+        ->assertOk()
+        ->assertSee('Proyek BADRUL Disiapkan Otomatis')
+        ->assertSee('Fitur buat proyek manual dinonaktifkan.')
+        ->assertDontSee('Buat Proyek &amp; Mulai Sintak B', false)
+        ->assertDontSee('Mulai Proyek dengan Sintaks BADRUL');
 
     $this->actingAs($user)
         ->get(route('dashboard.progress'))
-        ->assertRedirect(route('dashboard.sintak'));
+        ->assertOk();
 
     $this->actingAs($user)
         ->get(route('dashboard.help'))
@@ -87,16 +89,14 @@ test('user without project is directed to sintak setup and no project is created
     $this->actingAs($user)
         ->get(route('dashboard.sintak'))
         ->assertOk()
-        ->assertSee('Mulai Proyek dari Sintaks BADRUL')
-        ->assertSee('Buat Proyek &amp; Mulai Sintak B', false)
-        ->assertSee('Nama Proyek *')
-        ->assertSee('Deskripsi Proyek *')
-        ->assertSee('Proyek akan dibuat setelah Anda menekan tombol di bawah.');
+        ->assertSee('Model PjBL Sintaks B A D R U L')
+        ->assertDontSee('Proyek Belum Dibuat');
 
-    expect($user->fresh()->proyek()->count())->toBe(0);
+    expect($user->fresh()->proyek()->count())->toBe(14);
+    expect($user->fresh()->proyek()->where('nama_proyek', '')->count())->toBe(14);
 });
 
-test('user can create project from sintak setup with project name and description', function () {
+test('user can fill project identity from sintak b and d', function () {
     $user = User::factory()->create([
         'nama' => 'Admin AILS',
         'username' => 'admin-create-project',
@@ -105,25 +105,83 @@ test('user can create project from sintak setup with project name and descriptio
         'prodi' => 'Pemrograman Visual',
     ]);
 
-    $response = $this->actingAs($user)->post(route('dashboard.projects.create'), [
-        'page' => 'sintak',
-        'nama_proyek' => 'Sistem Inventori Toko',
-        'deskripsi' => 'Aplikasi untuk mengelola stok barang, pencatatan barang masuk, dan laporan inventori toko.',
-        'pertemuan_ke' => 8,
-    ]);
+    app(BadrulWorkflowService::class)->ensureUserProjects($user);
 
-    $project = $user->fresh()->proyek()->first();
+    $project = $user->fresh()->proyek()->where('pertemuan_ke', 8)->first();
 
     expect($project)->not->toBeNull();
+    expect($project->nama_proyek)->toBe('');
+    expect($project->deskripsi)->toBe('');
+
+    $responseB = $this->actingAs($user)->post(route('dashboard.stages.update', ['proyek' => $project->id_proyek, 'sintak' => 'B']), [
+        'page' => 'sintak',
+        'nama_proyek' => 'Sistem Inventori Toko',
+        'masalah_nyata' => 'Stok barang sering tidak sinkron dengan penjualan harian.',
+        'pertanyaan_mendasar' => 'Bagaimana membuat aplikasi inventori yang membantu pencatatan stok lebih akurat?',
+        'ide_solusi_awal' => 'Membuat aplikasi desktop inventori dengan update stok otomatis.',
+        'tujuan_proyek' => 'Menyediakan pencatatan stok dan mutasi barang yang cepat.',
+        'catatan_tambahan' => 'Fokus awal pada alur barang masuk dan barang keluar.',
+    ]);
+
+    $project = $project->fresh();
+
     expect($project->nama_proyek)->toBe('Sistem Inventori Toko');
-    expect($project->deskripsi)->toBe('Aplikasi untuk mengelola stok barang, pencatatan barang masuk, dan laporan inventori toko.');
+    expect($project->deskripsi)->toBe('');
     expect($project->pertemuan_ke)->toBe(8);
     expect($project->materi)->toBe('Database (MySQL)');
 
-    $response->assertRedirect(route('dashboard.sintak', [
+    $responseB->assertRedirect(route('dashboard.sintak', [
         'proyek' => $project->id_proyek,
-        'sintak' => 'B',
+        'sintak' => 'A',
     ]));
+
+    $responseD = $this->actingAs($user)->post(route('dashboard.stages.update', ['proyek' => $project->id_proyek, 'sintak' => 'D']), [
+        'page' => 'sintak',
+        'nama_proyek' => 'Sistem Inventori Toko',
+        'deskripsi' => 'Aplikasi untuk mengelola stok barang, pencatatan barang masuk, dan laporan inventori toko.',
+        'struktur_database' => 'Tabel barang, mutasi, dan pengguna.',
+        'kode_program' => 'Modul transaksi stok dan form input barang.',
+        'kendala_pengembangan' => 'Sinkronisasi stok masuk dan keluar masih diuji.',
+    ]);
+
+    $project = $project->fresh();
+
+    expect($project->deskripsi)->toBe('Aplikasi untuk mengelola stok barang, pencatatan barang masuk, dan laporan inventori toko.');
+
+    $responseD->assertRedirect(route('dashboard.sintak', [
+        'proyek' => $project->id_proyek,
+        'sintak' => 'R',
+    ]));
+});
+
+test('sintak selector shows all meetings because projects are auto prepared', function () {
+    $user = User::factory()->create([
+        'nama' => 'Admin AILS',
+        'username' => 'admin-multi-project',
+        'password' => 'admin',
+        'role' => 'admin',
+        'prodi' => 'Pemrograman Visual',
+    ]);
+
+    $response = $this->actingAs($user)->get(route('dashboard.sintak'));
+
+    $response->assertOk();
+
+    $dom = new DOMDocument();
+
+    libxml_use_internal_errors(true);
+    $dom->loadHTML($response->getContent());
+    libxml_clear_errors();
+
+    $xpath = new DOMXPath($dom);
+    $meetingNodes = $xpath->query('//select[@id="sintak-pertemuan"]/option');
+    $materialNodes = $xpath->query('//select[@id="sintak-materi"]/option');
+
+    expect($meetingNodes->length)->toBe(14);
+    expect($materialNodes->length)->toBe(14);
+    expect(trim($meetingNodes->item(0)?->textContent ?? ''))->toBe('1');
+    expect(trim($meetingNodes->item(13)?->textContent ?? ''))->toBe('14');
+    expect($user->fresh()->proyek()->count())->toBe(14);
 });
 
 test('authenticated user can see the dashboard overview page', function () {
@@ -179,6 +237,120 @@ test('authenticated user can open menu pages separately', function () {
         ->assertOk()
         ->assertSee('Panduan Penggunaan AILS BADRUL')
         ->assertSee('Ringkasan cara kerja prototipe');
+});
+
+test('sintak selector opens matching project without updating database', function () {
+    $user = User::factory()->create([
+        'nama' => 'Admin AILS',
+        'username' => 'admin-sintak-selector',
+        'password' => 'admin',
+        'role' => 'admin',
+        'prodi' => 'Pemrograman Visual',
+    ]);
+
+    $firstProject = createDraftProjectForUser(
+        $user,
+        3,
+        'Aplikasi Presensi',
+        'Aplikasi untuk mencatat kehadiran mahasiswa pada setiap pertemuan.',
+    );
+
+    $secondProject = createDraftProjectForUser(
+        $user,
+        8,
+        'Aplikasi Inventori',
+        'Aplikasi untuk mengelola stok barang dan mutasi inventori.',
+    );
+
+    $response = $this->actingAs($user)->get(route('dashboard.sintak', [
+        'proyek' => $secondProject->id_proyek,
+    ]));
+
+    $response
+        ->assertOk()
+        ->assertSee($secondProject->materi)
+        ->assertSee(route('dashboard.stages.update', ['proyek' => $secondProject->id_proyek, 'sintak' => 'B']), false)
+        ->assertDontSee(route('dashboard.stages.update', ['proyek' => $firstProject->id_proyek, 'sintak' => 'B']), false);
+
+    $dom = new DOMDocument();
+
+    libxml_use_internal_errors(true);
+    $dom->loadHTML($response->getContent());
+    libxml_clear_errors();
+
+    $xpath = new DOMXPath($dom);
+    $meetingNodes = $xpath->query('//select[@id="sintak-pertemuan"]/option');
+    $materialNodes = $xpath->query('//select[@id="sintak-materi"]/option');
+
+    $meetingLabels = [];
+    $materialLabels = [];
+
+    foreach ($meetingNodes as $node) {
+        $meetingLabels[] = trim($node->textContent);
+    }
+
+    foreach ($materialNodes as $node) {
+        $materialLabels[] = trim($node->textContent);
+    }
+
+    expect($meetingLabels)->toBe(array_map('strval', range(1, 14)));
+    expect($materialLabels)->toBe(config('badrul.material_options'));
+
+    expect($firstProject->fresh()->pertemuan_ke)->toBe(3);
+    expect($firstProject->fresh()->materi)->toBe(app(BadrulWorkflowService::class)->materialForMeeting(3));
+    expect($secondProject->fresh()->pertemuan_ke)->toBe(8);
+    expect($secondProject->fresh()->materi)->toBe(app(BadrulWorkflowService::class)->materialForMeeting(8));
+});
+
+test('sintak selector resolves requested meeting against auto prepared projects', function () {
+    $user = User::factory()->create([
+        'nama' => 'Admin AILS',
+        'username' => 'admin-sintak-missing-project',
+        'password' => 'admin',
+        'role' => 'admin',
+        'prodi' => 'Pemrograman Visual',
+    ]);
+
+    createDraftProjectForUser(
+        $user,
+        2,
+        'Aplikasi Akademik',
+        'Aplikasi untuk mengelola data akademik mahasiswa.',
+    );
+
+    $requestedMeeting = 4;
+    $requestedMaterial = app(BadrulWorkflowService::class)->materialForMeeting($requestedMeeting);
+    $requestedProject = $user->fresh()->proyek()->where('pertemuan_ke', $requestedMeeting)->first();
+
+    expect($requestedProject)->not->toBeNull();
+
+    $response = $this->actingAs($user)->get(route('dashboard.sintak', [
+        'pertemuan_ke' => $requestedMeeting,
+        'materi' => $requestedMaterial,
+    ]));
+
+    $response
+        ->assertOk()
+        ->assertDontSee('Proyek Belum Dibuat')
+        ->assertSee(route('dashboard.stages.update', ['proyek' => $requestedProject->id_proyek, 'sintak' => 'B']), false);
+
+    $dom = new DOMDocument();
+
+    libxml_use_internal_errors(true);
+    $dom->loadHTML($response->getContent());
+    libxml_clear_errors();
+
+    $xpath = new DOMXPath($dom);
+    $meetingNodes = $xpath->query('//select[@id="sintak-pertemuan"]/option');
+    $materialNodes = $xpath->query('//select[@id="sintak-materi"]/option');
+
+    expect($meetingNodes->length)->toBe(14);
+    expect($materialNodes->length)->toBe(14);
+    expect(trim($meetingNodes->item($requestedMeeting - 1)?->textContent ?? ''))->toBe((string) $requestedMeeting);
+    expect(trim($materialNodes->item($requestedMeeting - 1)?->textContent ?? ''))->toBe($requestedMaterial);
+    expect($requestedProject->fresh()->pertemuan_ke)->toBe($requestedMeeting);
+    expect($requestedProject->fresh()->materi)->toBe($requestedMaterial);
+    expect($user->fresh()->proyek()->count())->toBe(14);
 });
 
 test('user can save reflection journal from progress page', function () {
@@ -268,7 +440,14 @@ test('project material is derived automatically from selected meeting', function
         'prodi' => 'Pemrograman Visual',
     ]);
 
-    $project = createDraftProjectForUser($user);
+    $project = createDraftProjectForUser(
+        $user,
+        9,
+        'Aplikasi Koneksi Database',
+        'Aplikasi latihan koneksi database untuk pengelolaan data sederhana.',
+    );
+
+    $project->update(['materi' => 'Materi Sementara']);
 
     $response = $this->actingAs($user)->post(route('dashboard.projects.update', $project), [
         'page' => 'sintak',

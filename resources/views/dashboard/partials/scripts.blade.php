@@ -1,6 +1,7 @@
 <script>
     const meetingField = document.getElementById('sintak-pertemuan');
     const materialField = document.getElementById('sintak-materi');
+    const sintakProjectInput = document.querySelector('[data-sintak-project-input]');
     const assistantInputs = document.querySelectorAll('input[name="assistant_picker"]');
     const assistantExtraContext = document.getElementById('assistant-extra-context');
     const openChatgptAssistantButton = document.getElementById('open-chatgpt-assistant');
@@ -70,6 +71,20 @@
 
     const syncMaterialField = () => {
         if (! materialField || ! meetingField) {
+            return;
+        }
+
+        if (sintakProjectInput) {
+            const selectedProjectId = `${meetingField.value || materialField.value || sintakProjectInput.value || ''}`;
+
+            if (selectedProjectId === '') {
+                return;
+            }
+
+            meetingField.value = selectedProjectId;
+            materialField.value = selectedProjectId;
+            sintakProjectInput.value = selectedProjectId;
+
             return;
         }
 
@@ -155,6 +170,18 @@
         });
     });
 
+    document.querySelectorAll('[data-delete-confirm-button]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const confirmMessage = button.getAttribute('data-confirm-message')?.trim() || 'Apakah Anda yakin ingin menghapus data ini?';
+
+            if (! window.confirm(confirmMessage)) {
+                return;
+            }
+
+            button.form?.submit();
+        });
+    });
+
     assistantExtraContext?.addEventListener('input', () => {
         syncAssistantLaunchState();
         updateLaunchFeedback('Prompt akan disalin ke clipboard lalu ChatGPT Web dibuka.');
@@ -172,6 +199,20 @@
 
     document.querySelectorAll('[data-sintak-autosubmit]').forEach((input) => {
         input.addEventListener('change', () => {
+            if (sintakProjectInput) {
+                const selectedProjectId = `${input.value || sintakProjectInput.value || ''}`;
+
+                if (selectedProjectId !== '') {
+                    meetingField.value = selectedProjectId;
+                    materialField.value = selectedProjectId;
+                    sintakProjectInput.value = selectedProjectId;
+                }
+
+                input.form?.requestSubmit();
+
+                return;
+            }
+
             if (input === meetingField) {
                 syncMaterialField();
             }

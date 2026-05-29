@@ -38,6 +38,16 @@
                 <strong>Bantuan</strong>
             </span>
         </a>
+        @if ($user->role === 'admin')
+            <a class="nav-link {{ $page === 'users' ? 'is-active' : '' }}" href="{{ route('dashboard.users') }}">
+                <span class="nav-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 13C14.2091 13 16 11.2091 16 9C16 6.79086 14.2091 5 12 5C9.79086 5 8 6.79086 8 9C8 11.2091 9.79086 13 12 13Z" stroke="currentColor" stroke-width="1.8"/><path d="M5 19.5C5.9 16.9 8.6 15 12 15C15.4 15 18.1 16.9 19 19.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M19 7V11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M17 9H21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                </span>
+                <span class="nav-text">
+                    <strong>Kelola User</strong>
+                </span>
+            </a>
+        @endif
     </nav>
 
     <div class="sidebar-footer">

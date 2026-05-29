@@ -72,22 +72,22 @@
 
     <article class="panel progress-card progress-detail-combined-card">
         <div>
-            <div class="panel-header">
-                <div>
-                    <h2 class="panel-title">Detail Proyek</h2>
-                    {{-- <p class="panel-subtitle">Ringkasan proyek aktif dan progres keseluruhan yang sudah dicapai.</p> --}}
-                </div>
+            <div>
+                <h2 class="panel-title">Detail Proyek</h2>
+                {{-- <p class="panel-subtitle">Ringkasan proyek aktif dan progres keseluruhan yang sudah dicapai.</p> --}}
             </div>
+
+            <br>
 
             <div class="project-detail-stack">
                 <div class="project-detail-section">
                     <span class="detail-label">Nama Proyek</span>
-                    <strong class="detail-value-strong">{{ $currentProject->nama_proyek }}</strong>
+                    <strong class="detail-value-copy">{{ $currentProject->displayName() }}</strong>
                 </div>
 
                 <div class="project-detail-section">
                     <span class="detail-label">Deskripsi Proyek</span>
-                    <span class="detail-value-copy">{{ $currentProject->deskripsi }}</span>
+                    <span class="detail-value-copy">{{ $currentProject->displayDescription() }}</span>
                 </div>
 
                 <div class="project-detail-section progress-meter">

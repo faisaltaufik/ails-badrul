@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
+use App\Services\BadrulWorkflowService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -9,6 +11,10 @@ use Illuminate\View\View;
 
 class AuthController extends Controller
 {
+    public function __construct(private readonly BadrulWorkflowService $workflow)
+    {
+    }
+
     public function create(): View|RedirectResponse
     {
         if (Auth::check()) {
@@ -36,6 +42,13 @@ class AuthController extends Controller
         }
 
         $request->session()->regenerate();
+
+        /** @var User|null $user */
+        $user = $request->user();
+
+        if ($user) {
+            $this->workflow->ensureUserProjects($user);
+        }
 
         return redirect()->intended(route('dashboard'));
     }

@@ -1,8 +1,8 @@
-<div class="footer-note {{ $page === 'progress' ? 'is-info' : '' }}">
+<div class="footer-note {{ in_array($page, ['progress', 'users'], true) ? 'is-info' : '' }}">
     <div class="footer-note-copy">
         <span class="footer-note-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                @if ($page === 'progress')
+                @if (in_array($page, ['progress', 'users'], true))
                     <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8"/>
                     <path d="M12 11.2V16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                     <circle cx="12" cy="8.2" r="1" fill="currentColor"/>
@@ -13,10 +13,18 @@
                 @endif
             </svg>
         </span>
-        <strong>{{ $page === 'progress' ? 'Refleksi yang Anda tulis akan membantu Anda dan dosen dalam memantau perkembangan pembelajaran berbasis proyek.' : 'Kerjakan setiap tahapan sintak secara berurutan untuk hasil proyek yang lebih terstruktur dan optimal.' }}</strong>
+        <strong>
+            @if ($page === 'progress')
+                Refleksi yang Anda tulis akan membantu Anda dan dosen dalam memantau perkembangan pembelajaran berbasis proyek.
+            @elseif ($page === 'users')
+                Kelola akses pengguna secara terpusat agar akun admin, dosen, dan mahasiswa tetap tertata dan mudah dipantau.
+            @else
+                Kerjakan setiap tahapan sintak secara berurutan untuk hasil proyek yang lebih terstruktur dan optimal.
+            @endif
+        </strong>
     </div>
 
-    @if ($page !== 'progress')
+    @if (! in_array($page, ['progress', 'users'], true))
         <a class="footer-link" href="{{ route('dashboard.help', $menuQuery) }}">
             <span class="footer-link-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">

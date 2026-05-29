@@ -36,6 +36,10 @@
                             @case('help')
                                 @include('dashboard.pages.help')
                                 @break
+
+                            @case('users')
+                                @include('dashboard.pages.users')
+                                @break
                         @endswitch
 
                         @include('dashboard.partials.footer-note')

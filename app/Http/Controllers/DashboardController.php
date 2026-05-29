@@ -10,6 +10,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class DashboardController extends Controller
@@ -38,16 +39,73 @@ class DashboardController extends Controller
         return $this->renderPage($request, 'help');
     }
 
+    public function users(Request $request): View
+    {
+        return $this->renderUsersPage($this->authorizeAdmin($request));
+    }
+
+    public function storeUser(Request $request): RedirectResponse
+    {
+        $this->authorizeAdmin($request);
+
+        $validated = $request->validate(
+            $this->userRules(),
+            $this->userValidationMessages(),
+        );
+
+        User::create($validated);
+
+        return redirect()
+            ->route('dashboard.users')
+            ->with('status', 'User baru berhasil ditambahkan.');
+    }
+
+    public function updateUser(Request $request, User $managedUser): RedirectResponse
+    {
+        $this->authorizeAdmin($request);
+
+        $validated = $request->validate(
+            $this->userRules($managedUser),
+            $this->userValidationMessages(),
+        );
+
+        if (($validated['password'] ?? null) === null || ($validated['password'] ?? '') === '') {
+            unset($validated['password']);
+        }
+
+        $managedUser->update($validated);
+
+        return redirect()
+            ->route('dashboard.users')
+            ->with('status', 'Data user berhasil diperbarui.');
+    }
+
+    public function destroyUser(Request $request, User $managedUser): RedirectResponse
+    {
+        $admin = $this->authorizeAdmin($request);
+
+        if ($managedUser->id_user === $admin->id_user) {
+            return redirect()
+                ->route('dashboard.users')
+                ->withErrors(['user' => 'Akun admin yang sedang aktif tidak dapat dihapus.']);
+        }
+
+        $managedUser->delete();
+
+        return redirect()
+            ->route('dashboard.users')
+            ->with('status', 'User berhasil dihapus.');
+    }
+
     public function createProject(Request $request): RedirectResponse
     {
         /** @var User $user */
         $user = $request->user();
-        $validated = $request->validate([
-            'page' => ['nullable', 'string'],
-            'nama_proyek' => ['required', 'string', 'max:200'],
-            'deskripsi' => ['required', 'string'],
-            'pertemuan_ke' => ['nullable', 'integer', 'min:1', 'max:14'],
-        ]);
+        $validated = $request->validate(
+            $this->projectRules($user),
+            $this->projectValidationMessages(),
+            $this->projectValidationAttributes(),
+        );
 
         $attributes = [
             'nama_proyek' => $validated['nama_proyek'],
@@ -72,13 +130,16 @@ class DashboardController extends Controller
     {
         $this->authorizeProject($request, $proyek);
 
-        $validated = $request->validate([
-            'nama_proyek' => ['required', 'string', 'max:200'],
-            'pertemuan_ke' => ['required', 'integer', 'min:1', 'max:14'],
-            'deskripsi' => ['required', 'string'],
-            'sintak' => ['nullable', 'string', 'size:1'],
-            'page' => ['nullable', 'string'],
-        ]);
+        /** @var User $user */
+        $user = $request->user();
+
+        $validated = $request->validate(
+            array_merge($this->projectRules($user, $proyek), [
+                'sintak' => ['nullable', 'string', 'size:1'],
+            ]),
+            $this->projectValidationMessages(),
+            $this->projectValidationAttributes(),
+        );
 
         $this->workflow->updateProject($proyek, $validated);
 
@@ -201,24 +262,33 @@ class DashboardController extends Controller
         /** @var User $user */
         $user = $request->user();
 
-        $this->workflow->syncMasterData();
         $pageMeta = $this->pageMeta($page);
 
-        $projects = $user->proyek()->orderByDesc('tanggal_buat')->get();
+        $projects = $this->workflow->ensureUserProjects($user);
+        $availableMeetingOptions = $this->availableMeetingOptions($projects);
+        $selectedMeeting = $this->selectedMeetingFromRequest($request);
+        $selectedMaterial = $this->selectedMaterialFromRequest($request, $selectedMeeting);
 
-        if ($projects->isEmpty()) {
-            if (in_array($page, ['dashboard', 'help'], true)) {
-                return $this->renderPageWithoutProject($user, $projects, $page, $pageMeta);
-            }
+        $selectedProject = null;
 
-            return redirect()
-                ->route('dashboard');
-                // ->with('status', 'Belum ada proyek. Pilih pertemuan pada menu Sintaks BADRUL untuk membuat proyek pertama Anda.');
+        if ($page === 'sintak' && ! $request->has('proyek') && $selectedMeeting !== null) {
+            $selectedProject = $projects->firstWhere('pertemuan_ke', $selectedMeeting);
         }
 
-        $currentProject = $this->resolveProject($request, $projects);
+        $currentProject = $selectedProject instanceof Proyek
+            ? $selectedProject
+            : $this->resolveProject($request, $projects);
 
-        $this->workflow->ensureProjectWorkflow($currentProject);
+        $activeStageCode = $this->workflow->currentStageCode(
+            $currentProject,
+            $request->string('sintak')->toString(),
+        );
+        $activeStage = $this->workflow->stageDefinition($activeStageCode);
+        $workspaceValues = $this->workflow->workspaceValues(
+            $this->workflow->stageWorkspace($currentProject, $activeStageCode),
+        );
+        $stageCards = $this->workflow->stageCards($currentProject);
+        $assistants = $this->workflow->assistantsForStage($activeStageCode);
 
         $currentProject->load([
             'progressSintak.sintakBadrul',
@@ -226,17 +296,6 @@ class DashboardController extends Controller
             'refleksi',
         ]);
 
-        $activeStageCode = $this->workflow->currentStageCode(
-            $currentProject,
-            $request->string('sintak')->toString() ?: null,
-        );
-
-        $activeStage = $this->workflow->stageDefinition($activeStageCode);
-        $workspace = $this->workflow->stageWorkspace($currentProject, $activeStageCode);
-        $workspaceValues = $this->workflow->workspaceValues($workspace);
-        $stageCards = $this->workflow->stageCards($currentProject);
-        $reflectionStageCode = $this->reflectionStageCode($stageCards, $activeStageCode);
-        $assistants = $this->workflow->assistantsForStage($activeStageCode);
         $selectedAssistant = $this->resolveAssistant($request, $assistants);
         $analytics = $this->workflow->analytics($currentProject);
         $latestReflection = $this->workflow->latestReflection($currentProject);
@@ -244,6 +303,7 @@ class DashboardController extends Controller
         $progressPercentLabel = abs($progressPercent - floor($progressPercent)) < 0.001
             ? number_format($progressPercent, 0, ',', '.')
             : number_format($progressPercent, 2, ',', '.');
+        $reflectionStageCode = $this->reflectionStageCode($stageCards, $activeStageCode);
 
         return view('dashboard', [
             'page' => $page,
@@ -252,7 +312,11 @@ class DashboardController extends Controller
             'projects' => $projects,
             'currentProject' => $currentProject,
             'meetingOptions' => $this->workflow->meetingOptions(),
+            'availableMeetingOptions' => $availableMeetingOptions,
             'materialOptions' => $this->workflow->materialOptions(),
+            'selectedMeeting' => $selectedMeeting,
+            'selectedMaterial' => $selectedMaterial,
+            'selectedProjectMissing' => false,
             'stageCards' => $stageCards,
             'activeStageCode' => $activeStageCode,
             'activeStage' => $activeStage,
@@ -282,7 +346,16 @@ class DashboardController extends Controller
         ]);
     }
 
-    private function renderPageWithoutProject(User $user, Collection $projects, string $page, array $pageMeta): View
+    private function renderPageWithoutProject(
+        User $user,
+        Collection $projects,
+        string $page,
+        array $pageMeta,
+        array $availableMeetingOptions,
+        ?int $selectedMeeting = null,
+        ?string $selectedMaterial = null,
+        bool $selectedProjectMissing = false,
+    ): View
     {
         $activeStageCode = 'B';
         $activeStage = $this->workflow->stageDefinition($activeStageCode);
@@ -294,7 +367,11 @@ class DashboardController extends Controller
             'projects' => $projects,
             'currentProject' => null,
             'meetingOptions' => $this->workflow->meetingOptions(),
+            'availableMeetingOptions' => $availableMeetingOptions,
             'materialOptions' => $this->workflow->materialOptions(),
+            'selectedMeeting' => $selectedMeeting,
+            'selectedMaterial' => $selectedMaterial,
+            'selectedProjectMissing' => $selectedProjectMissing,
             'stageCards' => [],
             'activeStageCode' => $activeStageCode,
             'activeStage' => $activeStage,
@@ -329,6 +406,170 @@ class DashboardController extends Controller
         ]);
     }
 
+    private function renderUsersPage(User $user): View
+    {
+        $page = 'users';
+        $pageMeta = $this->pageMeta($page);
+
+        return view('dashboard', [
+            'page' => $page,
+            'user' => $user,
+            'userRoleLabel' => $this->userRoleLabel($user),
+            'projects' => collect(),
+            'currentProject' => null,
+            'meetingOptions' => $this->workflow->meetingOptions(),
+            'availableMeetingOptions' => [],
+            'materialOptions' => $this->workflow->materialOptions(),
+            'selectedMeeting' => null,
+            'selectedMaterial' => null,
+            'selectedProjectMissing' => false,
+            'stageCards' => [],
+            'activeStageCode' => '',
+            'activeStage' => [],
+            'workspaceValues' => [],
+            'assistants' => collect(),
+            'selectedAssistantId' => null,
+            'analytics' => [
+                'total' => 0,
+                'completed' => 0,
+                'percentage' => 0,
+                'current_stage' => null,
+                'workspace_count' => 0,
+                'reflection_count' => 0,
+                'last_activity' => null,
+            ],
+            'latestReflection' => null,
+            'helpCards' => $this->workflow->helpCards(),
+            'headerTitle' => $pageMeta['title'],
+            'headerDescription' => $pageMeta['description'],
+            'menuQuery' => [],
+            'progressPercent' => 0,
+            'progressPercentLabel' => '0',
+            'reflectionSuggestions' => [],
+            'reflectionAssistantPrompt' => '',
+            'dashboardSummary' => [
+                'currentStageLabel' => 'Kelola akun pengguna dari dashboard admin.',
+                'recentStageCards' => collect(),
+                'latestReflectionPreview' => '',
+            ],
+            'statusLabels' => $this->statusLabels(),
+            'statusColors' => $this->statusColors(),
+            'managedUsers' => User::query()->orderBy('role')->orderBy('nama')->get(),
+            'roleOptions' => $this->userRoleOptions(),
+        ]);
+    }
+
+    private function selectedMeetingFromRequest(Request $request): ?int
+    {
+        $selectedMeeting = $request->integer('pertemuan_ke');
+
+        if ($selectedMeeting >= 1 && $selectedMeeting <= 14) {
+            return $selectedMeeting;
+        }
+
+        $selectedMaterial = trim($request->string('materi')->toString());
+
+        if ($selectedMaterial === '') {
+            return null;
+        }
+
+        $materialIndex = array_search($selectedMaterial, $this->workflow->materialOptions(), true);
+
+        if ($materialIndex === false) {
+            return null;
+        }
+
+        return $materialIndex + 1;
+    }
+
+    private function selectedMaterialFromRequest(Request $request, ?int $selectedMeeting): ?string
+    {
+        if ($selectedMeeting !== null) {
+            return $this->workflow->materialForMeeting($selectedMeeting);
+        }
+
+        $selectedMaterial = trim($request->string('materi')->toString());
+
+        return $selectedMaterial !== '' ? $selectedMaterial : null;
+    }
+
+    private function projectRules(User $user, ?Proyek $ignoreProject = null): array
+    {
+        $meetingRule = Rule::unique('proyek', 'pertemuan_ke')
+            ->where(fn ($query) => $query->where('id_user', $user->id_user));
+
+        if ($ignoreProject) {
+            $meetingRule = $meetingRule->ignore($ignoreProject->id_proyek, 'id_proyek');
+        }
+
+        return [
+            'page' => ['nullable', 'string'],
+            'nama_proyek' => ['required', 'string', 'max:200'],
+            'deskripsi' => ['required', 'string'],
+            'pertemuan_ke' => ['required', 'integer', 'min:1', 'max:14', $meetingRule],
+        ];
+    }
+
+    private function projectValidationMessages(): array
+    {
+        return [
+            'pertemuan_ke.unique' => 'Anda sudah memiliki proyek BADRUL untuk pertemuan ini. Pilih pertemuan lain.',
+        ];
+    }
+
+    private function projectValidationAttributes(): array
+    {
+        return [
+            'pertemuan_ke' => 'pertemuan',
+        ];
+    }
+
+    private function userRules(?User $managedUser = null): array
+    {
+        $usernameRule = Rule::unique('users', 'username');
+
+        if ($managedUser) {
+            $usernameRule = $usernameRule->ignore($managedUser->id_user, 'id_user');
+        }
+
+        return [
+            'nama' => ['required', 'string', 'max:100'],
+            'username' => ['required', 'string', 'max:50', $usernameRule],
+            'password' => $managedUser
+                ? ['nullable', 'string', 'min:8', 'max:100']
+                : ['required', 'string', 'min:8', 'max:100'],
+            'role' => ['required', 'string', Rule::in($this->userRoleOptions())],
+            'prodi' => ['required', 'string', 'max:100'],
+        ];
+    }
+
+    private function userValidationMessages(): array
+    {
+        return [
+            'username.unique' => 'Username sudah digunakan pengguna lain.',
+            'password.min' => 'Password minimal 8 karakter.',
+        ];
+    }
+
+    private function userRoleOptions(): array
+    {
+        return ['admin', 'dosen', 'mahasiswa'];
+    }
+
+    private function availableMeetingOptions(Collection $projects): array
+    {
+        $usedMeetings = $projects
+            ->pluck('pertemuan_ke')
+            ->map(static fn (mixed $meeting) => (int) $meeting)
+            ->unique()
+            ->all();
+
+        return array_values(array_filter(
+            $this->workflow->meetingOptions(),
+            static fn (mixed $meetingOption) => ! in_array((int) $meetingOption, $usedMeetings, true),
+        ));
+    }
+
     private function pageMeta(string $page): array
     {
         return match ($page) {
@@ -347,6 +588,10 @@ class DashboardController extends Controller
             'help' => [
                 'title' => 'Bantuan',
                 'description' => 'Pelajari panduan penggunaan AILS BADRUL, alur kerja sintak, dan cara memanfaatkan AI pendamping belajar.',
+            ],
+            'users' => [
+                'title' => 'Kelola User',
+                'description' => 'Tambahkan, perbarui, dan hapus akun pengguna langsung dari dashboard admin.',
             ],
             default => [
                 'title' => 'Dashboard',
@@ -423,7 +668,7 @@ class DashboardController extends Controller
 
     private function reflectionAssistantPrompt(Proyek $currentProject): string
     {
-        return 'Bantu saya merefleksikan perkembangan pembelajaran proyek "'.$currentProject->nama_proyek.'" berdasarkan progres sintak dan kendala yang saya alami. Mengapa saya masih kesulitan pada beberapa bagian, apa penyebabnya, dan langkah perbaikan apa yang sebaiknya saya lakukan selanjutnya?';
+        return 'Bantu saya merefleksikan perkembangan pembelajaran proyek "'.$currentProject->displayName().'" berdasarkan progres sintak dan kendala yang saya alami. Mengapa saya masih kesulitan pada beberapa bagian, apa penyebabnya, dan langkah perbaikan apa yang sebaiknya saya lakukan selanjutnya?';
     }
 
     private function statusLabels(): array
@@ -472,6 +717,15 @@ class DashboardController extends Controller
         abort_unless($proyek->id_user === $request->user()?->id_user, 403);
     }
 
+    private function authorizeAdmin(Request $request): User
+    {
+        $user = $request->user();
+
+        abort_unless($user instanceof User && $user->role === 'admin', 403);
+
+        return $user;
+    }
+
     private function redirectToPage(string $page, Proyek $proyek, ?string $sintak, string $status): RedirectResponse
     {
         $parameters = [
@@ -490,7 +744,7 @@ class DashboardController extends Controller
     private function normalizePage(?string $page, string $fallback = 'dashboard'): string
     {
         return match ($page) {
-            'dashboard', 'sintak', 'progress', 'help' => $page,
+            'dashboard', 'sintak', 'progress', 'help', 'users' => $page,
             default => $fallback,
         };
     }
@@ -501,6 +755,7 @@ class DashboardController extends Controller
             'sintak' => 'dashboard.sintak',
             'progress' => 'dashboard.progress',
             'help' => 'dashboard.help',
+            'users' => 'dashboard.users',
             default => 'dashboard',
         };
     }

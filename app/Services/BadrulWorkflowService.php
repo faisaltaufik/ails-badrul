@@ -125,6 +125,39 @@ class BadrulWorkflowService
         return $project;
     }
 
+    public function ensureUserProjects(User $user): Collection
+    {
+        $this->syncMasterData();
+
+        $stages = SintakBadrul::query()
+            ->whereIn('kode_sintak', $this->stageCodes())
+            ->get()
+            ->keyBy('kode_sintak');
+
+        foreach ($this->meetingOptions() as $meetingOption) {
+            $meetingNumber = (int) $meetingOption;
+            $material = $this->materialForMeeting($meetingNumber);
+
+            $project = $user->proyek()->firstOrCreate(
+                ['pertemuan_ke' => $meetingNumber],
+                [
+                    'materi' => $material,
+                    'nama_proyek' => '',
+                    'deskripsi' => '',
+                    'tanggal_buat' => now(),
+                ],
+            );
+
+            if ($project->materi !== $material) {
+                $project->update(['materi' => $material]);
+            }
+
+            $this->ensureProjectWorkflowRecords($project, $stages);
+        }
+
+        return $user->proyek()->orderBy('pertemuan_ke')->get();
+    }
+
     public function ensureProjectWorkflow(Proyek $project): void
     {
         $this->syncMasterData();
@@ -134,6 +167,11 @@ class BadrulWorkflowService
             ->get()
             ->keyBy('kode_sintak');
 
+        $this->ensureProjectWorkflowRecords($project, $stages);
+    }
+
+    private function ensureProjectWorkflowRecords(Proyek $project, Collection $stages): void
+    {
         foreach ($this->stageCodes() as $index => $code) {
             $stage = $stages->get($code);
 
@@ -325,9 +363,9 @@ class BadrulWorkflowService
         }
 
         return strtr($assistant->prompt_otomatis, [
-            ':nama_proyek' => $project->nama_proyek,
+            ':nama_proyek' => $project->displayName(),
             ':materi' => $project->materi,
-            ':deskripsi' => $project->deskripsi,
+            ':deskripsi' => $project->displayDescription(),
             ':sintak' => $this->stageDefinition($code)['title'],
         ]);
     }

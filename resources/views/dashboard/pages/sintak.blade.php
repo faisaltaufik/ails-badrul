@@ -1,11 +1,12 @@
 
 <section class="panel sintak-toolbar-panel">
-    <form id="sintak-toolbar-form" class="sintak-toolbar-form" method="POST" action="{{ route('dashboard.projects.update', $currentProject) }}">
-        @csrf
-        <input type="hidden" name="page" value="sintak">
-        <input type="hidden" name="sintak" value="{{ $activeStageCode }}">
-        <input type="hidden" name="nama_proyek" value="{{ $currentProject->nama_proyek }}">
-        <input type="hidden" name="deskripsi" value="{{ $currentProject->deskripsi }}">
+    @php
+        $sintakProjects = $projects->sortBy('pertemuan_ke')->values();
+        $selectedProjectId = (int) ($currentProject?->id_proyek ?? $sintakProjects->first()?->id_proyek ?? 0);
+    @endphp
+
+    <form id="sintak-toolbar-form" class="sintak-toolbar-form" method="GET" action="{{ route('dashboard.sintak') }}">
+        <input type="hidden" name="proyek" value="{{ $selectedProjectId }}" data-sintak-project-input>
 
         <div class="sintak-toolbar-item">
             <span class="sintak-toolbar-icon" aria-hidden="true">
@@ -18,10 +19,10 @@
             </span>
             <div class="sintak-toolbar-copy">
                 <label for="sintak-pertemuan">Pertemuan Ke</label>
-                <select id="sintak-pertemuan" class="sintak-toolbar-select" name="pertemuan_ke" data-sintak-autosubmit>
-                    @foreach ($meetingOptions as $meetingOption)
-                        <option value="{{ $meetingOption }}" {{ (int) $currentProject->pertemuan_ke === (int) $meetingOption ? 'selected' : '' }}>
-                            {{ $meetingOption }}
+                <select id="sintak-pertemuan" class="sintak-toolbar-select" data-sintak-autosubmit>
+                    @foreach ($sintakProjects as $projectOption)
+                        <option value="{{ $projectOption->id_proyek }}" {{ $selectedProjectId === (int) $projectOption->id_proyek ? 'selected' : '' }}>
+                            {{ $projectOption->pertemuan_ke }}
                         </option>
                     @endforeach
                 </select>
@@ -42,13 +43,12 @@
                 <select
                     id="sintak-materi"
                     class="sintak-toolbar-select"
-                    name="materi"
                     data-material-display
                     data-sintak-autosubmit
                 >
-                    @foreach ($materialOptions as $materialOption)
-                        <option value="{{ $materialOption }}" {{ $currentProject->materi === $materialOption ? 'selected' : '' }}>
-                            {{ $materialOption }}
+                    @foreach ($sintakProjects as $projectOption)
+                        <option value="{{ $projectOption->id_proyek }}" {{ $selectedProjectId === (int) $projectOption->id_proyek ? 'selected' : '' }}>
+                            {{ $projectOption->materi }}
                         </option>
                     @endforeach
                 </select>

@@ -1356,6 +1356,215 @@
                 font-weight: 700;
             }
 
+            .user-management-grid {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr);
+                gap: 18px;
+                align-items: start;
+            }
+
+            .user-management-panel,
+            .user-management-table-panel {
+                padding: 18px;
+            }
+
+            .user-management-count {
+                display: inline-flex;
+                align-items: center;
+                min-height: 28px;
+                padding: 0 10px;
+                border-radius: 999px;
+                background: #eef5ff;
+                color: var(--blue-700);
+                font-size: 0.7rem;
+                font-weight: 700;
+            }
+
+            .user-management-list {
+                display: grid;
+                gap: 18px;
+            }
+
+            .user-management-card-header {
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 12px;
+            }
+
+            .user-management-table-wrap {
+                margin-top: 14px;
+                overflow-x: auto;
+            }
+
+            .user-management-table {
+                width: 100%;
+                min-width: 980px;
+                border-collapse: separate;
+                border-spacing: 0;
+            }
+
+            .user-management-table th,
+            .user-management-table td {
+                padding: 12px;
+                border-bottom: 1px solid var(--line);
+                vertical-align: top;
+                text-align: left;
+            }
+
+            .user-management-table th {
+                background: #f6f9ff;
+                color: var(--navy-900);
+                font-size: 0.7rem;
+                font-weight: 800;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+                position: sticky;
+                top: 0;
+                z-index: 1;
+            }
+
+            .user-management-table tbody tr:hover {
+                background: #fbfdff;
+            }
+
+            .user-management-table td input,
+            .user-management-table td select {
+                width: 100%;
+                border-radius: 10px;
+                border: 1px solid var(--line);
+                background: #fff;
+                padding: 10px 12px;
+                font: inherit;
+                font-size: 0.74rem;
+                color: var(--ink);
+            }
+
+            .user-management-table td input:focus,
+            .user-management-table td select:focus {
+                outline: none;
+                border-color: rgba(29, 95, 242, 0.48);
+                box-shadow: 0 0 0 4px rgba(29, 95, 242, 0.1);
+            }
+
+            .user-management-table-number {
+                width: 52px;
+                color: var(--ink-soft);
+                font-size: 0.72rem;
+                font-weight: 700;
+                white-space: nowrap;
+            }
+
+            .user-management-table-actions {
+                min-width: 188px;
+            }
+
+            .user-management-hidden-form {
+                display: none;
+            }
+
+            .user-management-action-stack {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: stretch;
+                gap: 8px;
+            }
+
+            .user-management-action-stack > .user-management-table-button,
+            .user-management-action-form {
+                flex: 1 1 0;
+            }
+
+            .user-management-action-form {
+                margin: 0;
+            }
+
+            .user-management-table-button {
+                min-height: 32px;
+                padding: 0 10px;
+                font-size: 0.69rem;
+                width: 100%;
+            }
+
+            .user-management-row-note {
+                flex-basis: 100%;
+                color: var(--ink-soft);
+                font-size: 0.66rem;
+                font-weight: 600;
+                line-height: 1.45;
+            }
+
+            .user-management-table-empty {
+                padding: 28px 18px;
+                text-align: center;
+                color: var(--ink-soft);
+                font-size: 0.76rem;
+                font-weight: 600;
+            }
+
+            .user-role-badge {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 28px;
+                padding: 0 12px;
+                border-radius: 999px;
+                font-size: 0.68rem;
+                font-weight: 800;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+            }
+
+            .user-role-badge.is-admin {
+                background: #e8f1ff;
+                color: #1550c2;
+            }
+
+            .user-role-badge.is-dosen {
+                background: #e8fbf4;
+                color: #0d8a5f;
+            }
+
+            .user-role-badge.is-mahasiswa {
+                background: #fff4e8;
+                color: #cc6d08;
+            }
+
+            .user-management-card-form {
+                margin-top: 14px;
+            }
+
+            .user-management-actions {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+            }
+
+            .user-management-delete-form {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                margin-top: 14px;
+                padding-top: 14px;
+                border-top: 1px solid var(--line);
+                flex-wrap: wrap;
+            }
+
+            .user-management-delete-note,
+            .user-management-password-note {
+                color: var(--ink-soft);
+                font-size: 0.68rem;
+                font-weight: 600;
+                line-height: 1.45;
+            }
+
+            .user-management-empty {
+                padding: 28px;
+                text-align: center;
+                color: var(--ink-soft);
+            }
+
             .progress-summary-panel {
                 padding: 16px 20px;
                 background: linear-gradient(180deg, #fbfdff 0%, #f5f9ff 100%);
@@ -1934,6 +2143,7 @@
                 .hero-grid,
                 .dashboard-secondary-grid,
                 .progress-layout,
+                .user-management-grid,
                 .workspace-grid,
                 .insight-grid,
                 .help-grid {
@@ -2036,7 +2246,9 @@
                 }
 
                 .progress-table-row,
-                .reflection-form-footer {
+                .reflection-form-footer,
+                .user-management-actions,
+                .user-management-delete-form {
                     grid-template-columns: 1fr;
                     flex-direction: column;
                     align-items: flex-start;

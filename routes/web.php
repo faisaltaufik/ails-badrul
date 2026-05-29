@@ -13,7 +13,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard/sintak', [DashboardController::class, 'sintak'])->name('dashboard.sintak');
     Route::get('/dashboard/progress', [DashboardController::class, 'progress'])->name('dashboard.progress');
     Route::get('/dashboard/help', [DashboardController::class, 'help'])->name('dashboard.help');
-    Route::post('/dashboard/projects', [DashboardController::class, 'createProject'])->name('dashboard.projects.create');
+    Route::get('/dashboard/users', [DashboardController::class, 'users'])->name('dashboard.users');
+    Route::post('/dashboard/users', [DashboardController::class, 'storeUser'])->name('dashboard.users.store');
+    Route::put('/dashboard/users/{managedUser}', [DashboardController::class, 'updateUser'])->name('dashboard.users.update');
+    Route::delete('/dashboard/users/{managedUser}', [DashboardController::class, 'destroyUser'])->name('dashboard.users.destroy');
     Route::post('/dashboard/projects/{proyek}', [DashboardController::class, 'updateProject'])->name('dashboard.projects.update');
     Route::post('/dashboard/projects/{proyek}/reflection', [DashboardController::class, 'updateReflection'])->name('dashboard.reflection.update');
     Route::post('/dashboard/projects/{proyek}/stages/{sintak}', [DashboardController::class, 'updateStage'])->name('dashboard.stages.update');

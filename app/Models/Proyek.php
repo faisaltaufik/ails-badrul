@@ -36,6 +36,23 @@ class Proyek extends Model
             'tanggal_buat' => 'datetime',
         ];
     }
+    public function displayName(): string
+    {
+        $name = trim((string) $this->nama_proyek);
+
+        return $name !== ''
+            ? $name
+            : 'Proyek Pertemuan '.$this->pertemuan_ke;
+    }
+
+    public function displayDescription(): string
+    {
+        $description = trim((string) $this->deskripsi);
+
+        return $description !== ''
+            ? $description
+            : 'Nama dan deskripsi proyek belum diisi. Lengkapi saat mengerjakan Sintaks BADRUL.';
+    }
 
     public function user(): BelongsTo
     {

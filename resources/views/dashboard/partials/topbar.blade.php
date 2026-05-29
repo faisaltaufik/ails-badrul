@@ -1,7 +1,7 @@
 <header class="topbar">
     <div class="welcome-stack">
-        <h1>{{ ! $currentProject ? 'Model PjBL BADRUL Berbantuan AILS' : $headerTitle }}</h1>
-        <p>{{ ! $currentProject ? 'Selamat datang di Proyek Baru Anda' : $headerDescription }}</p>
+        <h1>{{ ! $currentProject && $page !== 'users' ? 'Model PjBL BADRUL Berbantuan AILS' : $headerTitle }}</h1>
+        <p>{{ ! $currentProject && $page !== 'users' ? 'Selamat datang di Proyek Baru Anda' : $headerDescription }}</p>
     </div>
 
     <div class="topbar-side">
