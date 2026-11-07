@@ -158,6 +158,27 @@ class BadrulWorkflowService
         return $user->proyek()->orderBy('pertemuan_ke')->get();
     }
 
+    public function loginDashboardQuery(User $user): array
+    {
+        $projects = $this->ensureUserProjects($user)
+            ->load(['progressSintak.sintakBadrul', 'workspaceSintak', 'refleksi']);
+
+        if (! $this->projectsHaveMeaningfulActivity($projects)) {
+            return [];
+        }
+
+        $project = $this->loginLandingProject($projects);
+
+        if (! $project instanceof Proyek) {
+            return [];
+        }
+
+        return [
+            'proyek' => $project->id_proyek,
+            'sintak' => $this->currentStageCode($project),
+        ];
+    }
+
     public function ensureProjectWorkflow(Proyek $project): void
     {
         $this->syncMasterData();
@@ -185,24 +206,10 @@ class BadrulWorkflowService
                     'id_sintak' => $stage->id_sintak,
                 ],
                 [
-                    'status' => $index === 0 ? 'proses' : 'belum',
+                    'status' => 'belum',
                     'terakhir_update' => now(),
                 ],
             );
-        }
-
-        if (! $project->progressSintak()->where('status', 'proses')->exists()) {
-            $firstPending = $project->progressSintak()
-                ->where('status', 'belum')
-                ->orderBy('id_progress')
-                ->first();
-
-            if ($firstPending) {
-                $firstPending->update([
-                    'status' => 'proses',
-                    'terakhir_update' => now(),
-                ]);
-            }
         }
     }
 
@@ -307,6 +314,52 @@ class BadrulWorkflowService
             ?? $progressRows->last();
 
         return $current?->sintakBadrul?->kode_sintak ?? $this->stageCodes()[0];
+    }
+
+    public function inProgressStageCode(Proyek $project): ?string
+    {
+        $progressRows = $project->progressSintak()
+            ->with('sintakBadrul')
+            ->get()
+            ->sortBy(fn (ProgressSintak $progress) => $this->stageDefinition($progress->sintakBadrul->kode_sintak)['order']);
+
+        return $progressRows->firstWhere('status', 'proses')?->sintakBadrul?->kode_sintak;
+    }
+
+    public function startStage(Proyek $project, string $requestedCode): string
+    {
+        if (! in_array($requestedCode, $this->stageCodes(), true)) {
+            throw new InvalidArgumentException("Sintak {$requestedCode} tidak terdaftar.");
+        }
+
+        $startableCode = $this->currentStageCode($project);
+        $codeToStart = $requestedCode;
+
+        $progressRows = $project->progressSintak()
+            ->with('sintakBadrul')
+            ->get()
+            ->keyBy(fn (ProgressSintak $progress) => $progress->sintakBadrul->kode_sintak);
+
+        $requestedProgress = $progressRows->get($requestedCode);
+
+        if (($requestedProgress?->status ?? 'belum') === 'belum' && $requestedCode !== $startableCode) {
+            $codeToStart = $startableCode;
+        }
+
+        $progress = $progressRows->get($codeToStart);
+
+        if (! $progress) {
+            throw new InvalidArgumentException("Progress sintak {$codeToStart} tidak ditemukan.");
+        }
+
+        if ($progress->status === 'belum') {
+            $progress->update([
+                'status' => 'proses',
+                'terakhir_update' => now(),
+            ]);
+        }
+
+        return $codeToStart;
     }
 
     public function stageCards(Proyek $project): array
@@ -462,20 +515,145 @@ class BadrulWorkflowService
                 default => 0.0,
             };
         }, 0.0);
-        $current = $progressRows->firstWhere('status', 'proses')
+        $currentProcess = $progressRows->firstWhere('status', 'proses');
+        $suggested = $currentProcess
             ?? $progressRows->firstWhere('status', 'belum')
             ?? $progressRows->last();
         $workspaceCount = $project->workspaceSintak()->count();
         $reflectionCount = $project->refleksi()->count();
+        $hasStarted = $progressRows->contains(fn (ProgressSintak $progress) => $progress->status !== 'belum')
+            || $workspaceCount > 0
+            || $reflectionCount > 0;
 
         return [
             'total' => $total,
             'completed' => $completed,
             'percentage' => round(min($weightedProgress, 100), 2),
-            'current_stage' => $current?->sintakBadrul?->kode_sintak,
+            'current_stage' => $currentProcess?->sintakBadrul?->kode_sintak,
+            'suggested_stage' => $suggested?->sintakBadrul?->kode_sintak,
+            'has_started' => $hasStarted,
             'workspace_count' => $workspaceCount,
             'reflection_count' => $reflectionCount,
-            'last_activity' => $progressRows->sortByDesc('terakhir_update')->first()?->terakhir_update,
+            'last_activity' => $progressRows
+                ->filter(fn (ProgressSintak $progress) => $progress->status !== 'belum')
+                ->sortByDesc('terakhir_update')
+                ->first()?->terakhir_update,
+        ];
+    }
+
+    private function loginLandingProject(Collection $projects): ?Proyek
+    {
+        $inProgressProject = $projects
+            ->filter(fn (Proyek $project) => $this->projectHasInProgressStage($project))
+            ->sortByDesc(fn (Proyek $project) => $this->projectActivityScore($project))
+            ->first();
+
+        if ($inProgressProject instanceof Proyek) {
+            return $inProgressProject;
+        }
+
+        $lastMeaningfulProject = $projects
+            ->filter(fn (Proyek $project) => $this->projectHasMeaningfulActivity($project))
+            ->sortByDesc(fn (Proyek $project) => $this->projectActivityScore($project))
+            ->first();
+
+        if (! $lastMeaningfulProject instanceof Proyek) {
+            return null;
+        }
+
+        if (! $this->projectIsCompleted($lastMeaningfulProject)) {
+            return $lastMeaningfulProject;
+        }
+
+        $nextProject = $projects
+            ->where('pertemuan_ke', '>', (int) $lastMeaningfulProject->pertemuan_ke)
+            ->sortBy('pertemuan_ke')
+            ->first();
+
+        return $nextProject instanceof Proyek ? $nextProject : $lastMeaningfulProject;
+    }
+
+    private function projectsHaveMeaningfulActivity(Collection $projects): bool
+    {
+        return $projects->contains(fn (Proyek $project) => $this->projectHasMeaningfulActivity($project));
+    }
+
+    private function projectHasMeaningfulActivity(Proyek $project): bool
+    {
+        $project->loadMissing(['progressSintak', 'workspaceSintak', 'refleksi']);
+
+        return $project->progressSintak->contains(fn ($progress) => $progress->status !== 'belum')
+            || $project->workspaceSintak->isNotEmpty()
+            || $project->refleksi->isNotEmpty();
+    }
+
+    private function projectHasInProgressStage(Proyek $project): bool
+    {
+        $project->loadMissing('progressSintak');
+
+        return $project->progressSintak->contains(fn ($progress) => $progress->status === 'proses');
+    }
+
+    private function projectIsCompleted(Proyek $project): bool
+    {
+        $project->loadMissing('progressSintak');
+
+        return $project->progressSintak->isNotEmpty()
+            && $project->progressSintak->every(fn ($progress) => $progress->status === 'selesai');
+    }
+
+    private function projectActivityScore(Proyek $project): int
+    {
+        $project->loadMissing(['progressSintak', 'workspaceSintak', 'refleksi']);
+
+        $progressTimestamp = (int) $project->progressSintak
+            ->filter(fn ($progress) => $progress->status !== 'belum')
+            ->max(fn ($progress) => $progress->terakhir_update?->getTimestamp() ?? 0);
+        $workspaceTimestamp = (int) $project->workspaceSintak
+            ->max(fn ($workspace) => $workspace->tanggal_update?->getTimestamp() ?? 0);
+        $reflectionTimestamp = (int) $project->refleksi
+            ->max(fn ($reflection) => $reflection->tanggal_refleksi?->getTimestamp() ?? 0);
+
+        return (max($progressTimestamp, $workspaceTimestamp, $reflectionTimestamp) * 100) + (int) $project->pertemuan_ke;
+    }
+
+    public function legacyAutoStartedProjectsForUser(User $user, bool $forceSingle = false): Collection
+    {
+        $user->loadMissing([
+            'proyek.progressSintak.sintakBadrul',
+            'proyek.workspaceSintak',
+            'proyek.refleksi',
+        ]);
+
+        $candidates = $user->proyek
+            ->filter(fn (Proyek $project) => $this->isLegacyAutoStartedProject($project))
+            ->values();
+
+        if (! $forceSingle && $candidates->count() < 2) {
+            return collect();
+        }
+
+        return $candidates;
+    }
+
+    public function normalizeLegacyAutoStartedProjectsForUser(
+        User $user,
+        bool $forceSingle = false,
+        bool $persist = true,
+    ): array {
+        $candidates = $this->legacyAutoStartedProjectsForUser($user, $forceSingle);
+
+        if ($persist) {
+            $candidates->each(fn (Proyek $project) => $this->resetProjectToNotStarted($project));
+        }
+
+        return [
+            'user_id' => $user->id_user,
+            'username' => $user->username,
+            'candidate_count' => $candidates->count(),
+            'normalized_count' => $persist ? $candidates->count() : 0,
+            'project_ids' => $candidates->pluck('id_proyek')->all(),
+            'meetings' => $candidates->pluck('pertemuan_ke')->all(),
         ];
     }
 
@@ -503,5 +681,50 @@ class BadrulWorkflowService
     private function encodeWorkspace(array $payload): string
     {
         return (string) json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    private function isLegacyAutoStartedProject(Proyek $project): bool
+    {
+        $project->loadMissing([
+            'progressSintak.sintakBadrul',
+            'workspaceSintak',
+            'refleksi',
+        ]);
+
+        if ($project->workspaceSintak->isNotEmpty() || $project->refleksi->isNotEmpty()) {
+            return false;
+        }
+
+        $progressByCode = $project->progressSintak
+            ->filter(fn (ProgressSintak $progress) => $progress->sintakBadrul !== null)
+            ->keyBy(fn (ProgressSintak $progress) => $progress->sintakBadrul->kode_sintak);
+
+        $beginProgress = $progressByCode->get('B');
+
+        if (! $beginProgress || $beginProgress->status !== 'proses') {
+            return false;
+        }
+
+        if ($progressByCode->contains(fn (ProgressSintak $progress) => $progress->status === 'selesai')) {
+            return false;
+        }
+
+        return $progressByCode
+            ->reject(fn (ProgressSintak $progress, string $code) => $code === 'B')
+            ->every(fn (ProgressSintak $progress) => $progress->status === 'belum');
+    }
+
+    private function resetProjectToNotStarted(Proyek $project): void
+    {
+        $project->loadMissing('progressSintak');
+
+        $resetTimestamp = $project->tanggal_buat ?? now();
+
+        foreach ($project->progressSintak as $progress) {
+            $progress->update([
+                'status' => 'belum',
+                'terakhir_update' => $resetTimestamp,
+            ]);
+        }
     }
 }

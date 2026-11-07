@@ -19,6 +19,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/dashboard/users/{managedUser}', [DashboardController::class, 'destroyUser'])->name('dashboard.users.destroy');
     Route::post('/dashboard/projects/{proyek}', [DashboardController::class, 'updateProject'])->name('dashboard.projects.update');
     Route::post('/dashboard/projects/{proyek}/reflection', [DashboardController::class, 'updateReflection'])->name('dashboard.reflection.update');
+    Route::post('/dashboard/projects/{proyek}/stages/{sintak}/start', [DashboardController::class, 'startStage'])->name('dashboard.stages.start');
     Route::post('/dashboard/projects/{proyek}/stages/{sintak}', [DashboardController::class, 'updateStage'])->name('dashboard.stages.update');
     Route::post('/logout', [AuthController::class, 'destroy'])->name('logout');
 });

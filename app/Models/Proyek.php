@@ -51,7 +51,7 @@ class Proyek extends Model
 
         return $description !== ''
             ? $description
-            : 'Nama dan deskripsi proyek belum diisi. Lengkapi saat mengerjakan Sintaks BADRUL.';
+            : 'Deskripsi proyek belum diisi. Lengkapi saat mengerjakan Sintaks BADRUL.';
     }
 
     public function user(): BelongsTo

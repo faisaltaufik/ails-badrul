@@ -333,6 +333,87 @@
                 gap: 12px;
             }
 
+            .dashboard-welcome-panel {
+                display: grid;
+                gap: 14px;
+                padding: 16px 18px 18px;
+                background: linear-gradient(180deg, #fbfdff 0%, #f4f8ff 100%);
+            }
+
+            .dashboard-welcome-header {
+                margin-bottom: 0;
+            }
+
+            .dashboard-welcome-header .panel-title {
+                font-size: 1rem;
+            }
+
+            .dashboard-welcome-header .panel-subtitle {
+                margin-top: 4px;
+            }
+
+            .dashboard-welcome-stage {
+                min-height: 250px;
+                display: grid;
+                grid-template-columns: minmax(410px, 220px) minmax(0, 1fr);
+                gap: 20px;
+                align-items: center;
+                padding: 6px 10px 6px 40px;
+                border-radius: 14px;
+                border: 1px solid rgba(29, 95, 242, 0.08);
+                background: linear-gradient(180deg, rgba(235, 242, 255, 0.42) 0%, rgba(245, 249, 255, 0.68) 100%);
+            }
+
+            .dashboard-welcome-stage-visual,
+            .dashboard-welcome-brand-visual {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .dashboard-welcome-brand-visual {
+                flex-direction: column;
+                gap: 18px;
+            }
+
+            .dashboard-welcome-stage-visual img {
+                width: min(100%, 745px);
+                height: auto;
+                object-fit: contain;
+                justify-content: center;
+            }
+
+            .dashboard-welcome-brand-visual img {
+                width: min(100%, 745px);
+                height: auto;
+                object-fit: contain;
+            }
+
+            .dashboard-welcome-actions {
+                display: flex;
+                justify-content: center;
+                width: 100%;
+            }
+
+            .dashboard-welcome-button {
+                min-width: 160px;
+                min-height: 36px;
+                padding: 0 18px;
+                font-size: 0.72rem;
+                gap: 8px;
+            }
+
+            .dashboard-welcome-button-icon {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .dashboard-welcome-button-icon svg {
+                width: 15px;
+                height: 15px;
+            }
+
             .panel {
                 padding: 14px;
                 border-radius: 16px;
@@ -901,8 +982,6 @@
             }
 
             .sintak-card {
-                color: inherit;
-                text-decoration: none;
                 border-radius: 15px;
                 border: 1px solid var(--line);
                 background: #fff;
@@ -919,9 +998,18 @@
                 transform: translateY(-2px);
             }
 
-            .sintak-card:focus-visible {
+            .sintak-card-link {
+                color: inherit;
+                text-decoration: none;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                flex: 1;
+            }
+
+            .sintak-card-link:focus-visible,
+            .stage-entry-button:focus-visible {
                 outline: none;
-                border-color: var(--stage-color, var(--warning));
                 box-shadow:
                     0 16px 32px color-mix(in srgb, var(--stage-color, var(--warning)) 18%, transparent),
                     0 0 0 3px color-mix(in srgb, var(--stage-color, var(--warning)) 18%, transparent);
@@ -999,7 +1087,14 @@
                 color: var(--stage-color, var(--navy-900));
                 font-size: 0.73rem;
                 font-weight: 700;
+                cursor: pointer;
+                appearance: none;
+                text-decoration: none;
                 transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+            }
+
+            .stage-entry-form {
+                margin-top: auto;
             }
 
             .sintak-card.is-active .stage-entry-button {
@@ -2136,6 +2231,15 @@
             }
 
             @media (max-width: 1240px) {
+                .dashboard-welcome-panel {
+                    padding: 16px;
+                }
+
+                .dashboard-welcome-stage {
+                    grid-template-columns: minmax(0, 1fr);
+                    justify-items: center;
+                }
+
                 .sintak-grid {
                     grid-template-columns: repeat(3, minmax(0, 1fr));
                 }
@@ -2199,6 +2303,27 @@
                 .topbar {
                     flex-direction: column;
                     align-items: stretch;
+                }
+
+                .dashboard-welcome-panel {
+                    padding: 16px;
+                }
+
+                .dashboard-welcome-stage {
+                    min-height: auto;
+                    padding: 12px 8px 0;
+                }
+
+                .dashboard-welcome-stage-visual img {
+                    width: min(100%, 220px);
+                }
+
+                .dashboard-welcome-brand-visual img {
+                    width: min(100%, 360px);
+                }
+
+                .dashboard-welcome-actions {
+                    width: auto;
                 }
 
                 .topbar-side {

@@ -15,10 +15,13 @@ class AuthController extends Controller
     {
     }
 
-    public function create(): View|RedirectResponse
+    public function create(Request $request): View|RedirectResponse
     {
         if (Auth::check()) {
-            return redirect()->route('dashboard');
+            /** @var User|null $user */
+            $user = $request->user();
+
+            return $this->redirectToDashboard($request, $user);
         }
 
         return view('auth.login', $this->loginViewData());
@@ -27,7 +30,10 @@ class AuthController extends Controller
     public function store(Request $request): RedirectResponse
     {
         if (Auth::check()) {
-            return redirect()->route('dashboard');
+            /** @var User|null $user */
+            $user = $request->user();
+
+            return $this->redirectToDashboard($request, $user);
         }
 
         $credentials = $request->validate([
@@ -46,11 +52,7 @@ class AuthController extends Controller
         /** @var User|null $user */
         $user = $request->user();
 
-        if ($user) {
-            $this->workflow->ensureUserProjects($user);
-        }
-
-        return redirect()->intended(route('dashboard'));
+        return $this->redirectToDashboard($request, $user);
     }
 
     public function dashboard(Request $request): View
@@ -87,5 +89,26 @@ class AuthController extends Controller
                 'noteBody' => 'Masuk menggunakan username dan password yang diberikan agar progres proyek BADRUL Anda tetap tersimpan.',
             ],
         ];
+    }
+
+    private function redirectToDashboard(Request $request, ?User $user): RedirectResponse
+    {
+        $dashboardUrl = route('dashboard', $user ? $this->workflow->loginDashboardQuery($user) : []);
+        $intendedUrl = $request->session()->pull('url.intended');
+
+        if (is_string($intendedUrl) && $intendedUrl !== '' && ! $this->shouldReplacePlainDashboardIntendedUrl($intendedUrl)) {
+            return redirect()->to($intendedUrl);
+        }
+
+        return redirect()->to($dashboardUrl);
+    }
+
+    private function shouldReplacePlainDashboardIntendedUrl(string $intendedUrl): bool
+    {
+        $dashboardPath = trim((string) parse_url(route('dashboard'), PHP_URL_PATH), '/');
+        $intendedPath = trim((string) parse_url($intendedUrl, PHP_URL_PATH), '/');
+        $intendedQuery = (string) parse_url($intendedUrl, PHP_URL_QUERY);
+
+        return $intendedPath === $dashboardPath && $intendedQuery === '';
     }
 }

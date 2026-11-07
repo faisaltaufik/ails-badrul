@@ -151,6 +151,23 @@ class DashboardController extends Controller
         );
     }
 
+    public function startStage(Request $request, Proyek $proyek, string $sintak): RedirectResponse
+    {
+        $this->authorizeProject($request, $proyek);
+
+        $page = $this->normalizePage($request->string('page')->toString(), 'sintak');
+        $startedStageCode = $this->workflow->startStage($proyek, $sintak);
+
+        return $this->redirectToPage(
+            $page,
+            $proyek->fresh(),
+            $startedStageCode,
+            $startedStageCode === $sintak
+                ? "Sintak {$sintak} siap dikerjakan."
+                : "Lanjutkan pengerjaan dari sintak {$startedStageCode}.",
+        );
+    }
+
     public function updateStage(Request $request, Proyek $proyek, string $sintak): RedirectResponse
     {
         $this->authorizeProject($request, $proyek);
@@ -264,7 +281,8 @@ class DashboardController extends Controller
 
         $pageMeta = $this->pageMeta($page);
 
-        $projects = $this->workflow->ensureUserProjects($user);
+        $projects = $this->workflow->ensureUserProjects($user)
+            ->load(['progressSintak.sintakBadrul', 'workspaceSintak', 'refleksi']);
         $availableMeetingOptions = $this->availableMeetingOptions($projects);
         $selectedMeeting = $this->selectedMeetingFromRequest($request);
         $selectedMaterial = $this->selectedMaterialFromRequest($request, $selectedMeeting);
@@ -279,6 +297,7 @@ class DashboardController extends Controller
             ? $selectedProject
             : $this->resolveProject($request, $projects);
 
+        $defaultStageCode = $this->workflow->currentStageCode($currentProject);
         $activeStageCode = $this->workflow->currentStageCode(
             $currentProject,
             $request->string('sintak')->toString(),
@@ -303,7 +322,33 @@ class DashboardController extends Controller
         $progressPercentLabel = abs($progressPercent - floor($progressPercent)) < 0.001
             ? number_format($progressPercent, 0, ',', '.')
             : number_format($progressPercent, 2, ',', '.');
+        $hasAnyProjectActivity = $this->projectsHaveMeaningfulActivity($projects);
+        $currentProjectHasMeaningfulActivity = $this->projectHasMeaningfulActivity($currentProject);
+        $activeStageCard = collect($stageCards)->firstWhere('code', $activeStageCode);
+        $activeStageStatus = $activeStageCard['status'] ?? 'belum';
+        $showStageWorkspace = $activeStageStatus !== 'belum';
+        $canStartActiveStage = $activeStageStatus === 'belum' && $activeStageCode === $defaultStageCode;
+        $showDashboardWelcome = $page === 'dashboard' && ! $hasAnyProjectActivity;
+        $showDashboardPendingProject = $page === 'dashboard' && ! $showDashboardWelcome && ! $currentProjectHasMeaningfulActivity;
+        $dashboardStageLabel = match (true) {
+            $showDashboardPendingProject => '-',
+            $showDashboardWelcome => 'Belum dimulai',
+            default => $this->workflow->inProgressStageCode($currentProject)
+                ?? ($progressPercent >= 100 ? 'Selesai' : $activeStageCode),
+        };
         $reflectionStageCode = $this->reflectionStageCode($stageCards, $activeStageCode);
+        $dashboardSummary = $this->dashboardSummary(
+            $currentProject,
+            $activeStage,
+            $activeStageCode,
+            $analytics,
+            $stageCards,
+            $latestReflection,
+        );
+
+        if ($showDashboardPendingProject) {
+            $dashboardSummary['currentStageLabel'] = 'Belum ada tahap aktif';
+        }
 
         return view('dashboard', [
             'page' => $page,
@@ -319,6 +364,7 @@ class DashboardController extends Controller
             'selectedProjectMissing' => false,
             'stageCards' => $stageCards,
             'activeStageCode' => $activeStageCode,
+            'defaultStageCode' => $defaultStageCode,
             'activeStage' => $activeStage,
             'workspaceValues' => $workspaceValues,
             'assistants' => $assistants,
@@ -331,16 +377,14 @@ class DashboardController extends Controller
             'menuQuery' => $this->menuQuery($currentProject, $activeStageCode),
             'progressPercent' => $progressPercent,
             'progressPercentLabel' => $progressPercentLabel,
+            'showDashboardWelcome' => $showDashboardWelcome,
+            'showDashboardPendingProject' => $showDashboardPendingProject,
+            'showStageWorkspace' => $showStageWorkspace,
+            'canStartActiveStage' => $canStartActiveStage,
+            'dashboardStageLabel' => $dashboardStageLabel,
             'reflectionSuggestions' => $this->reflectionSuggestions($reflectionStageCode),
             'reflectionAssistantPrompt' => $this->reflectionAssistantPrompt($currentProject),
-            'dashboardSummary' => $this->dashboardSummary(
-                $currentProject,
-                $activeStage,
-                $activeStageCode,
-                $analytics,
-                $stageCards,
-                $latestReflection,
-            ),
+            'dashboardSummary' => $dashboardSummary,
             'statusLabels' => $this->statusLabels(),
             'statusColors' => $this->statusColors(),
         ]);
@@ -374,6 +418,7 @@ class DashboardController extends Controller
             'selectedProjectMissing' => $selectedProjectMissing,
             'stageCards' => [],
             'activeStageCode' => $activeStageCode,
+            'defaultStageCode' => $activeStageCode,
             'activeStage' => $activeStage,
             'workspaceValues' => [],
             'assistants' => collect(),
@@ -394,6 +439,11 @@ class DashboardController extends Controller
             'menuQuery' => [],
             'progressPercent' => 0,
             'progressPercentLabel' => '0',
+            'showDashboardWelcome' => $page === 'dashboard',
+            'showDashboardPendingProject' => false,
+            'showStageWorkspace' => false,
+            'canStartActiveStage' => false,
+            'dashboardStageLabel' => 'Belum dimulai',
             'reflectionSuggestions' => [],
             'reflectionAssistantPrompt' => '',
             'dashboardSummary' => [
@@ -425,6 +475,7 @@ class DashboardController extends Controller
             'selectedProjectMissing' => false,
             'stageCards' => [],
             'activeStageCode' => '',
+            'defaultStageCode' => '',
             'activeStage' => [],
             'workspaceValues' => [],
             'assistants' => collect(),
@@ -445,6 +496,11 @@ class DashboardController extends Controller
             'menuQuery' => [],
             'progressPercent' => 0,
             'progressPercentLabel' => '0',
+            'showDashboardWelcome' => false,
+            'showDashboardPendingProject' => false,
+            'showStageWorkspace' => false,
+            'canStartActiveStage' => false,
+            'dashboardStageLabel' => 'Belum dimulai',
             'reflectionSuggestions' => [],
             'reflectionAssistantPrompt' => '',
             'dashboardSummary' => [
@@ -574,7 +630,7 @@ class DashboardController extends Controller
     {
         return match ($page) {
             'dashboard' => [
-                'title' => 'Dashboard',
+                'title' => 'Dashboard - AILS Model PjBL BADRUL',
                 'description' => 'Pantau proyek aktif, progress BADRUL, dan fokus pembelajaran utama Anda dari halaman dashboard.',
             ],
             'sintak' => [
@@ -594,7 +650,7 @@ class DashboardController extends Controller
                 'description' => 'Tambahkan, perbarui, dan hapus akun pengguna langsung dari dashboard admin.',
             ],
             default => [
-                'title' => 'Dashboard',
+                'title' => 'Dashboard - AILS Model PjBL BADRUL',
                 'description' => 'AILS siap mendukung pembelajaran proyek Anda pada setiap tahapan BADRUL.',
             ],
         };
@@ -697,10 +753,14 @@ class DashboardController extends Controller
         array $stageCards,
         mixed $latestReflection,
     ): array {
+        $isCompleted = (float) ($analytics['percentage'] ?? 0) >= 100;
+
         return [
-            'currentStageLabel' => $activeStageCode !== ''
+            'currentStageLabel' => $isCompleted
+                ? 'Seluruh sintak BADRUL pada proyek ini sudah selesai.'
+                : ($activeStageCode !== ''
                 ? "{$activeStageCode} - {$activeStage['title']}"
-                : ($analytics['current_stage'] ?? 'Belum ada tahap aktif'),
+                : ($analytics['suggested_stage'] ?? 'Belum ada tahap aktif')),
             'recentStageCards' => collect($stageCards)
                 ->sortByDesc(fn (array $card) => $card['updated_at']?->timestamp ?? 0)
                 ->values()
@@ -772,11 +832,67 @@ class DashboardController extends Controller
             }
         }
 
-        $project = $projects->first();
+        $project = $this->resumeProject($projects)
+            ?? $projects->sortBy('pertemuan_ke')->first();
 
         abort_unless($project instanceof Proyek, 404);
 
         return $project;
+    }
+
+    private function resumeProject(Collection $projects): ?Proyek
+    {
+        $inProgressProject = $projects
+            ->filter(fn (Proyek $project) => $this->projectHasInProgressStage($project))
+            ->sortByDesc(fn (Proyek $project) => $this->projectActivityScore($project))
+            ->first();
+
+        if ($inProgressProject instanceof Proyek) {
+            return $inProgressProject;
+        }
+
+        $lastActiveProject = $projects
+            ->filter(fn (Proyek $project) => $this->projectHasMeaningfulActivity($project))
+            ->sortByDesc(fn (Proyek $project) => $this->projectActivityScore($project))
+            ->first();
+
+        return $lastActiveProject instanceof Proyek ? $lastActiveProject : null;
+    }
+
+    private function projectHasInProgressStage(Proyek $project): bool
+    {
+        $project->loadMissing('progressSintak');
+
+        return $project->progressSintak->contains(fn ($progress) => $progress->status === 'proses');
+    }
+
+    private function projectHasMeaningfulActivity(Proyek $project): bool
+    {
+        $project->loadMissing(['progressSintak', 'workspaceSintak', 'refleksi']);
+
+        return $project->progressSintak->contains(fn ($progress) => $progress->status !== 'belum')
+            || $project->workspaceSintak->isNotEmpty()
+            || $project->refleksi->isNotEmpty();
+    }
+
+    private function projectsHaveMeaningfulActivity(Collection $projects): bool
+    {
+        return $projects->contains(fn (Proyek $project) => $this->projectHasMeaningfulActivity($project));
+    }
+
+    private function projectActivityScore(Proyek $project): int
+    {
+        $project->loadMissing(['progressSintak', 'workspaceSintak', 'refleksi']);
+
+        $progressTimestamp = (int) $project->progressSintak
+            ->filter(fn ($progress) => $progress->status !== 'belum')
+            ->max(fn ($progress) => $progress->terakhir_update?->getTimestamp() ?? 0);
+        $workspaceTimestamp = (int) $project->workspaceSintak
+            ->max(fn ($workspace) => $workspace->tanggal_update?->getTimestamp() ?? 0);
+        $reflectionTimestamp = (int) $project->refleksi
+            ->max(fn ($reflection) => $reflection->tanggal_refleksi?->getTimestamp() ?? 0);
+
+        return (max($progressTimestamp, $workspaceTimestamp, $reflectionTimestamp) * 100) + (int) $project->pertemuan_ke;
     }
 
     private function resolveAssistant(Request $request, Collection $assistants): ?AiAssistant

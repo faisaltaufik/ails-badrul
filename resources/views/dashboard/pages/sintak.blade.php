@@ -62,27 +62,43 @@
 
     <div class="sintak-grid">
         @foreach ($stageCards as $card)
-            <a
-                href="{{ route('dashboard.sintak', ['proyek' => $currentProject->id_proyek, 'sintak' => $card['code']]) }}"
+            <article
                 class="sintak-card is-{{ $card['status'] }} {{ $card['code'] === $activeStageCode ? 'is-active' : '' }}"
                 style="--stage-color: {{ $card['color'] }};"
             >
-                <div class="stage-head">
-                    <div class="stage-badge" style="background: {{ $card['color'] }};">{{ $card['code'] }}</div>
-                    <div class="stage-copy">
-                        <strong>{{ $card['title'] }}</strong>
+                <a
+                    href="{{ route('dashboard.sintak', ['proyek' => $currentProject->id_proyek, 'sintak' => $card['code']]) }}"
+                    class="sintak-card-link"
+                >
+                    <div class="stage-head">
+                        <div class="stage-badge" style="background: {{ $card['color'] }};">{{ $card['code'] }}</div>
+                        <div class="stage-copy">
+                            <strong>{{ $card['title'] }}</strong>
+                        </div>
                     </div>
-                </div>
 
-                <p class="stage-description">{{ $card['summary'] }}</p>
+                    <p class="stage-description">{{ $card['summary'] }}</p>
+                </a>
 
-                <span class="stage-entry-button">Masuk</span>
+                @if ($card['code'] === $activeStageCode && $canStartActiveStage)
+                    <form class="stage-entry-form" method="POST" action="{{ route('dashboard.stages.start', ['proyek' => $currentProject->id_proyek, 'sintak' => $card['code']]) }}">
+                        @csrf
+                        <input type="hidden" name="page" value="sintak">
+                        <button class="stage-entry-button" type="submit">Masuk</button>
+                    </form>
+                @elseif ($card['code'] === $activeStageCode && ($card['status'] ?? 'belum') !== 'belum')
+                    <a class="stage-entry-button" href="{{ route('dashboard.sintak', ['proyek' => $currentProject->id_proyek, 'sintak' => $card['code']]) }}">Masuk</a>
+                @elseif ($card['code'] === $activeStageCode)
+                    <a class="stage-entry-button" href="{{ route('dashboard.sintak', ['proyek' => $currentProject->id_proyek, 'sintak' => $defaultStageCode]) }}">Masuk</a>
+                @else
+                    <a class="stage-entry-button" href="{{ route('dashboard.sintak', ['proyek' => $currentProject->id_proyek, 'sintak' => $card['code']]) }}">Masuk</a>
+                @endif
 
                 <div class="stage-footer" style="color: {{ $statusColors[$card['status']] ?? 'var(--pending)' }};">
                     <span class="stage-tag">{{ $statusLabels[$card['status']] ?? 'Belum' }}</span>
                     <span class="stage-status-dot" aria-hidden="true"></span>
                 </div>
-            </a>
+            </article>
         @endforeach
     </div>
 
@@ -98,6 +114,7 @@
     $activeStageColor = $activeStageCard['color'] ?? ($activeStage['color'] ?? '#ff7b1a');
 @endphp
 
+@if ($showStageWorkspace)
 <section class="workspace-grid" style="--stage-color: {{ $activeStageColor }};">
     <article class="panel workspace-panel">
         <div class="panel-header workspace-header">
@@ -250,3 +267,4 @@
         </div>
     </aside>
 </section>
+@endif
